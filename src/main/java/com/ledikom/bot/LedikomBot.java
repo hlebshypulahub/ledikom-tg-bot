@@ -43,6 +43,12 @@ public class LedikomBot extends TelegramLongPollingBot {
 
             processMessage(msg.getText(), chatId);
         }
+        else if (update.hasCallbackQuery()) {
+            var qry = update.getCallbackQuery();
+            var chatId = qry.getMessage().getChatId();
+
+            processMessage(qry.getData(), chatId);
+        }
 
     }
 
@@ -50,6 +56,8 @@ public class LedikomBot extends TelegramLongPollingBot {
 
         switch (command) {
             case "/start" -> sendMessage(botService.start(chatId));
+
+            case "Активировать купон" -> sendMessage(botService.sendCoupon(), chatId);
 
             case "/setnotification" -> System.out.println("setnotification");
 

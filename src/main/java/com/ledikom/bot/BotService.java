@@ -1,5 +1,6 @@
 package com.ledikom.bot;
 
+import com.ledikom.user.User;
 import com.ledikom.utils.BotResponses;
 import lombok.Getter;
 import lombok.Setter;
@@ -8,8 +9,8 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Duration;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +21,7 @@ import java.util.Map;
 @Getter
 public class BotService {
 
-    static final Map<Long, LocalDateTime> usersCouponTime= new HashMap<>();
+    static final Map<Long, User> users = new HashMap<>();
 
     SendMessage start(Long chatId) {
         var sm = SendMessage.builder()
@@ -45,15 +46,29 @@ public class BotService {
         return sm;
     }
 
-    String getCoupon() {
-        LocalDateTime startTime = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    String getCoupon(Long chatId) {
+        var startTime = LocalTime.now();
+
+        users.put(chatId, new User(chatId, startTime, true));
 
         return """
-                %s
+                Времени осталось: %s
                 
                 LEDIKOM BOT 2023
-                """.formatted(startTime.format(formatter));
+                """.formatted(countTime(startTime));
+    }
+
+    public String countTime(LocalTime startTime) {
+        LocalTime currentTime = LocalTime.now();
+        Duration elapsed = Duration.between(startTime, currentTime);
+        Duration duration = Duration.ofMinutes(5);
+
+        Duration timeLeft = duration.minus(elapsed);
+
+        long MM = timeLeft.toMinutesPart();
+        long SS = timeLeft.toSecondsPart();
+
+        return String.format("%02d:%02d", MM, SS);
     }
 
 }

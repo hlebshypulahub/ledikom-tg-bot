@@ -1,17 +1,23 @@
 package com.ledikom.bot;
 
+import com.ledikom.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+
+import static com.ledikom.bot.BotService.users;
 
 @Component
 public class LedikomBot extends TelegramLongPollingBot {
@@ -24,8 +30,6 @@ public class LedikomBot extends TelegramLongPollingBot {
     private Long techAdminId;
     private final BotService botService;
     private final Logger log = LoggerFactory.getLogger(LedikomBot.class);
-    private Integer couponMessageId;
-
 
     public LedikomBot(BotService botService) {
         this.botService = botService;
@@ -65,17 +69,23 @@ public class LedikomBot extends TelegramLongPollingBot {
             case "/start" -> sendMessage(botService.start(chatId));
 
             case "Активировать купон" -> {
-                sendCoupon(botService.getCoupon(), chatId);
+
+//                if (users.get(chatId).isCouponUsed()) {
+//                    sendMessage("Вы уже использовали свой купон.", chatId);
+//                }
+
+                sendCoupon(botService.getCoupon(chatId), chatId);
 
                 new Timer().schedule(
                         new TimerTask() {
                             @Override
                             public void run() {
-                                deleteMessage(chatId, couponMessageId);
+                                deleteMessage(chatId, users.get(chatId).getCouponMessageId());
+                                users.remove(chatId);
                             }
                         },
-//                        5 * 60 * 1000 // 5 minutes in milliseconds
-                        5000
+                        5 * 60 * 1000 // 5 minutes in milliseconds
+//                        5000
                 );
             }
 
@@ -120,7 +130,7 @@ public class LedikomBot extends TelegramLongPollingBot {
 
         try {
             Message sentMessage = execute(sm);
-            couponMessageId = sentMessage.getMessageId();
+            users.get(chatId).setCouponMessageId(sentMessage.getMessageId());
         } catch (Exception e) {
             log.trace(e.getMessage());
         }
@@ -136,4 +146,32 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
+
+    @Scheduled(fixedRate = 1000)
+    void editMessage() {
+        if (users.isEmpty()) {return;}
+
+        for (Map.Entry<Long, User> entry : users.entrySet()) {
+            var chatId = entry.getKey();
+            var user = entry.getValue();
+
+            var editMessageText = EditMessageText.builder()
+                    .chatId(chatId)
+                    .messageId(user.getCouponMessageId())
+                    .text("""
+                            Времени осталось: %s
+                                            
+                            LEDIKOM BOT 2023
+                            """.formatted(botService.countTime(user.getCouponStartTime()))
+                    ).build();
+
+            try {
+                execute(editMessageText);
+            } catch (Exception e) {
+                log.trace(e.getMessage());
+            }
+
+        }
+
+    }
 }

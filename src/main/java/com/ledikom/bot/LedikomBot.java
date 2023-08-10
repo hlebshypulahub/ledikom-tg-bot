@@ -6,7 +6,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+
+import java.util.Timer;
+import java.util.TimerTask;
 
 @Component
 public class LedikomBot extends TelegramLongPollingBot {
@@ -19,6 +24,8 @@ public class LedikomBot extends TelegramLongPollingBot {
     private Long techAdminId;
     private final BotService botService;
     private final Logger log = LoggerFactory.getLogger(LedikomBot.class);
+    private Integer couponMessageId;
+
 
     public LedikomBot(BotService botService) {
         this.botService = botService;
@@ -57,7 +64,20 @@ public class LedikomBot extends TelegramLongPollingBot {
         switch (command) {
             case "/start" -> sendMessage(botService.start(chatId));
 
-            case "Активировать купон" -> sendMessage(botService.sendCoupon(), chatId);
+            case "Активировать купон" -> {
+                sendCoupon(botService.getCoupon(), chatId);
+
+                new Timer().schedule(
+                        new TimerTask() {
+                            @Override
+                            public void run() {
+                                deleteMessage(chatId, couponMessageId);
+                            }
+                        },
+//                        5 * 60 * 1000 // 5 minutes in milliseconds
+                        5000
+                );
+            }
 
             case "/setnotification" -> System.out.println("setnotification");
 
@@ -78,7 +98,6 @@ public class LedikomBot extends TelegramLongPollingBot {
                 .chatId(chatId)
                 .text(botReply).build();
 
-
         try {
             execute(sm);
         } catch (Exception e) {
@@ -89,6 +108,29 @@ public class LedikomBot extends TelegramLongPollingBot {
     private void sendMessage(SendMessage sm) {
         try {
             execute(sm);
+        } catch (Exception e) {
+            log.trace(e.getMessage());
+        }
+    }
+
+    private void sendCoupon(String botReply, Long chatId) {
+        var sm = SendMessage.builder()
+                .chatId(chatId)
+                .text(botReply).build();
+
+        try {
+            Message sentMessage = execute(sm);
+            couponMessageId = sentMessage.getMessageId();
+        } catch (Exception e) {
+            log.trace(e.getMessage());
+        }
+    }
+
+    private void deleteMessage(Long chatId, int messageId) {
+        var dm = new DeleteMessage(String.valueOf(chatId), messageId);
+
+        try {
+            execute(dm);
         } catch (Exception e) {
             log.trace(e.getMessage());
         }

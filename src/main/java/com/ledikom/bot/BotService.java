@@ -1,6 +1,8 @@
 package com.ledikom.bot;
 
 import com.ledikom.utils.BotResponses;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -9,10 +11,17 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKe
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
+@Setter
+@Getter
 public class BotService {
+
+    static final Map<Long, LocalDateTime> usersCouponTime= new HashMap<>();
+
     SendMessage start(Long chatId) {
         var sm = SendMessage.builder()
                 .chatId(chatId)
@@ -36,14 +45,15 @@ public class BotService {
         return sm;
     }
 
-    String sendCoupon() {
-        LocalDateTime currentDateTime = LocalDateTime.now();
+    String getCoupon() {
+        LocalDateTime startTime = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
         return """
                 %s
                 
                 LEDIKOM BOT 2023
-                """.formatted(currentDateTime.format(formatter));
+                """.formatted(startTime.format(formatter));
     }
+
 }

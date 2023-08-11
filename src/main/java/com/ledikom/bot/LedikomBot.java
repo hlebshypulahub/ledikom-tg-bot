@@ -4,16 +4,13 @@ import com.ledikom.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
-import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -70,23 +67,25 @@ public class LedikomBot extends TelegramLongPollingBot {
 
             case "Активировать купон" -> {
 
-//                if (users.get(chatId).isCouponUsed()) {
-//                    sendMessage("Вы уже использовали свой купон.", chatId);
-//                }
+                if (!users.isEmpty() && users.get(chatId).isCouponUsed()) {
+                    sendMessage("Вы уже использовали свой купон.", chatId);
+                    break;
+                }
 
-                sendCoupon(botService.getCoupon(chatId), chatId);
+                Timer timer = new Timer();
 
-                new Timer().schedule(
+                timer.scheduleAtFixedRate(
                         new TimerTask() {
                             @Override
                             public void run() {
-                                deleteMessage(chatId, users.get(chatId).getCouponMessageId());
-                                users.remove(chatId);
+                                updateCouponTimer(chatId, users.get(chatId), timer);
                             }
                         },
-                        5 * 60 * 1000 // 5 minutes in milliseconds
-//                        5000
+                        0, 1000
                 );
+
+                sendCoupon(botService.getCoupon(chatId), chatId);
+
             }
 
             case "/setnotification" -> System.out.println("setnotification");
@@ -136,41 +135,39 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-    private void deleteMessage(Long chatId, int messageId) {
-        var dm = new DeleteMessage(String.valueOf(chatId), messageId);
+    private void editMessage(Long chatId, Integer messageId, String botReply) {
+        var editMessageText = EditMessageText.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .text(botReply)
+                .build();
 
         try {
-            execute(dm);
+            execute(editMessageText);
         } catch (Exception e) {
             log.trace(e.getMessage());
         }
     }
 
+    void updateCouponTimer(Long chatId, User user, Timer timer) {
+        var time = botService.getTimeLeft(user.getCouponStartTime());
 
-    @Scheduled(fixedRate = 1000)
-    void editMessage() {
-        if (users.isEmpty()) {return;}
+        if(time.isNegative()) {
+            timer.cancel();
 
-        for (Map.Entry<Long, User> entry : users.entrySet()) {
-            var chatId = entry.getKey();
-            var user = entry.getValue();
+            editMessage(chatId, user.getCouponMessageId(), """
+                                                                    Время вашего купона истекло
+                                                                                    
+                                                                    LEDIKOM BOT 2023
+                                                                    """);
 
-            var editMessageText = EditMessageText.builder()
-                    .chatId(chatId)
-                    .messageId(user.getCouponMessageId())
-                    .text("""
-                            Времени осталось: %s
-                                            
-                            LEDIKOM BOT 2023
-                            """.formatted(botService.countTime(user.getCouponStartTime()))
-                    ).build();
+        } else {
 
-            try {
-                execute(editMessageText);
-            } catch (Exception e) {
-                log.trace(e.getMessage());
-            }
-
+            editMessage(chatId, user.getCouponMessageId(), """
+                                                            Времени осталось: %s
+                                                                            
+                                                            LEDIKOM BOT 2023
+                                                            """.formatted(botService.formatTime(time)));
         }
 
     }

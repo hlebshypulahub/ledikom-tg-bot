@@ -55,18 +55,20 @@ public class BotService {
                 Времени осталось: %s
                 
                 LEDIKOM BOT 2023
-                """.formatted(countTime(startTime));
+                """.formatted(formatTime(getTimeLeft(startTime)));
     }
 
-    public String countTime(LocalTime startTime) {
+    public Duration getTimeLeft(LocalTime startTime) {
         LocalTime currentTime = LocalTime.now();
         Duration elapsed = Duration.between(startTime, currentTime);
-        Duration duration = Duration.ofMinutes(5);
+        Duration duration = Duration.ofMinutes(1);
 
-        Duration timeLeft = duration.minus(elapsed);
+        return duration.minus(elapsed);
+    }
 
-        long MM = timeLeft.toMinutesPart();
-        long SS = timeLeft.toSecondsPart();
+    public String formatTime(Duration time) {
+        long MM = time.toMinutesPart();
+        long SS = time.toSecondsPart();
 
         return String.format("%02d:%02d", MM, SS);
     }

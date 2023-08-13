@@ -1,9 +1,13 @@
 package com.ledikom.bot;
 
-import com.ledikom.user.User;
+import com.ledikom.model.Coupon;
+import com.ledikom.model.User;
+import com.ledikom.model.UserCouponKey;
+import com.ledikom.model.UserCouponRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -13,8 +17,6 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 
 import java.util.Timer;
 import java.util.TimerTask;
-
-import static com.ledikom.bot.BotService.users;
 
 @Component
 public class LedikomBot extends TelegramLongPollingBot {
@@ -50,8 +52,7 @@ public class LedikomBot extends TelegramLongPollingBot {
             var chatId = msg.getChatId();
 
             processMessage(msg.getText(), chatId);
-        }
-        else if (update.hasCallbackQuery()) {
+        } else if (update.hasCallbackQuery()) {
             var qry = update.getCallbackQuery();
             var chatId = qry.getMessage().getChatId();
 
@@ -63,29 +64,21 @@ public class LedikomBot extends TelegramLongPollingBot {
     public void processMessage(String command, Long chatId) {
 
         switch (command) {
-            case "/start" -> sendMessage(botService.start(chatId));
+            case "/start" -> sendMessage(botService.addUserAndGenerateHelloMessage(chatId));
 
-            case "Активировать купон" -> {
+            case "Активировать приветственный купон" -> {
+                Coupon coupon = botService.generateHelloCouponForUserIfNotUsed(chatId);
 
-                if (!users.isEmpty() && users.get(chatId).isCouponUsed()) {
-                    sendMessage("Вы уже использовали свой купон.", chatId);
-                    break;
+                if (coupon == null) {
+                    sendMessage("Вы уже использовали свой приветственный купон.", chatId);
+                } else {
+                    // TODO: Add unique coupon to text
+                    String couponTextWithUniqueSign = coupon.getText();
+                    UserCouponKey userCouponKey = sendCoupon("Времени осталось: 5:00" +
+                            "\n\n" +
+                            couponTextWithUniqueSign, chatId);
+                    botService.addCouponToMap(userCouponKey, couponTextWithUniqueSign);
                 }
-
-                Timer timer = new Timer();
-
-                timer.scheduleAtFixedRate(
-                        new TimerTask() {
-                            @Override
-                            public void run() {
-                                updateCouponTimer(chatId, users.get(chatId), timer);
-                            }
-                        },
-                        0, 1000
-                );
-
-                sendCoupon(botService.getCoupon(chatId), chatId);
-
             }
 
             case "/setnotification" -> System.out.println("setnotification");
@@ -122,20 +115,21 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendCoupon(String botReply, Long chatId) {
+    private UserCouponKey sendCoupon(String couponText, Long chatId) {
         var sm = SendMessage.builder()
                 .chatId(chatId)
-                .text(botReply).build();
-
+                .text(couponText).build();
         try {
             Message sentMessage = execute(sm);
-            users.get(chatId).setCouponMessageId(sentMessage.getMessageId());
+            return new UserCouponKey(sentMessage.getChatId(), sentMessage.getMessageId());
         } catch (Exception e) {
             log.trace(e.getMessage());
         }
+
+        return null;
     }
 
-    private void editMessage(Long chatId, Integer messageId, String botReply) {
+    private void editMessage(final Long chatId, final Integer messageId, final String botReply) {
         var editMessageText = EditMessageText.builder()
                 .chatId(chatId)
                 .messageId(messageId)
@@ -149,26 +143,24 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-    void updateCouponTimer(Long chatId, User user, Timer timer) {
-        var time = botService.getTimeLeft(user.getCouponStartTime());
+    private void updateCouponTimerAndMessage(final UserCouponKey userCouponKey, final UserCouponRecord userCouponRecord) {
+        long timeLeftInSeconds = (userCouponRecord.getExpiryTimestamp() - System.currentTimeMillis()) / 1000;
 
-        if(time.isNegative()) {
-            timer.cancel();
+        if (timeLeftInSeconds >= 0) {
+            final String text = "Времени осталось: " + timeLeftInSeconds / 60 + ":" + (timeLeftInSeconds % 60 < 10 ? "0" + timeLeftInSeconds % 60 : timeLeftInSeconds % 60) +
+                    "\n\n" +
+                    userCouponRecord.getText();
 
-            editMessage(chatId, user.getCouponMessageId(), """
-                                                                    Время вашего купона истекло
-                                                                                    
-                                                                    LEDIKOM BOT 2023
-                                                                    """);
-
+            editMessage(userCouponKey.getChatId(), userCouponKey.getMessageId(), text);
         } else {
-
-            editMessage(chatId, user.getCouponMessageId(), """
-                                                            Времени осталось: %s
-                                                                            
-                                                            LEDIKOM BOT 2023
-                                                            """.formatted(botService.formatTime(time)));
+            editMessage(userCouponKey.getChatId(), userCouponKey.getMessageId(), "Время вашего купона истекло.");
         }
 
+    }
+
+    @Scheduled(fixedRate = 1000)
+    public void processCouponsInMap() {
+        BotService.userCoupons.entrySet().removeIf(userCoupon -> userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 5000);
+        BotService.userCoupons.forEach(this::updateCouponTimerAndMessage);
     }
 }

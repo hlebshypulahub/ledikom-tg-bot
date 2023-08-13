@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @ComponentScan(basePackages = {
-        "com.ledikom.bot",
+        "com.ledikom",
         "org.telegram.telegrambots"
 })
 @EnableScheduling

@@ -19,4 +19,13 @@ public final class BotResponses {
                 """;
     }
 
+    public static String couponAcceptMessage(int durationInMinutes) {
+        // TODO: update to normal format
+        return "Купон действует " + durationInMinutes + " минут. Вы уверены что хотите активировать сейчас? Показать на кассe";
+    }
+
+    public static String couponUsedMessage() {
+        // TODO: update to normal format
+        return "Coupon used!!!!!!!!!!";
+    }
 }

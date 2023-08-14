@@ -44,4 +44,13 @@ public class CouponService {
         user.getCoupons().addAll(coupons);
         userService.saveUser(user);
     }
+
+    public Coupon findByName(final String helloCouponName) {
+        return couponRepository.findByName(helloCouponName).orElseThrow(() -> new RuntimeException("Coupon not found"));
+    }
+
+    public Coupon findCouponForUser(final User user, final String couponCommand) {
+        int couponId = Integer.parseInt(couponCommand.split("_")[1]);
+        return user.getCoupons().stream().filter(c -> c.getId() == couponId).findFirst().orElse(null);
+    }
 }

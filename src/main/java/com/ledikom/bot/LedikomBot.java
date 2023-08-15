@@ -62,6 +62,7 @@ public class LedikomBot extends TelegramLongPollingBot {
 
 //    kupony - Мои активные купоны
 //    moya_ssylka - Моя реферальная ссылка
+//    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
     public void processMessage(String command, Long chatId) {
 
         if(command.startsWith("couponPreview_")) {
@@ -82,6 +83,8 @@ public class LedikomBot extends TelegramLongPollingBot {
             case "/kupony" -> sendMessage(botService.showAllCoupons(chatId));
 
             case "/moya_ssylka" -> sendMessage(botService.getReferralLinkForUser(chatId));
+
+            case "/vkl_otkl_rassylku" -> sendMessage(botService.generateTriggerReceiveNewsMessage(chatId));
 
             case "/setnotification" -> System.out.println("setnotification");
 

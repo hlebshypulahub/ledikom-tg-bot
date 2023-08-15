@@ -20,9 +20,11 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private Long chatId;
+    private Integer referralCount;
 
-    public User(final Long chatId) {
+    public User(final Long chatId, final Integer referralCount) {
         this.chatId = chatId;
+        this.referralCount = referralCount;
     }
 
     @ManyToMany(fetch = FetchType.EAGER)

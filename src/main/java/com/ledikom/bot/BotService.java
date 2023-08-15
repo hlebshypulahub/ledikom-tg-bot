@@ -30,6 +30,8 @@ public class BotService {
     private String helloCouponName;
     @Value("${coupon.time-in-minutes}")
     private int couponTimeInMinutes;
+    @Value("${bot_username}")
+    private String botUsername;
 
     private final UserService userService;
     private final CouponService couponService;
@@ -40,16 +42,19 @@ public class BotService {
     }
 
     public SendMessage addUserAndGenerateHelloMessage(final long chatId) {
-        // TODO: if user exists - do nothing
-        userService.addNewUser(chatId);
+        SendMessage sm = null;
 
-        var sm = SendMessage.builder()
-                .chatId(chatId)
-                .text(BotResponses.startMessage()).build();
+        if (!userService.userExistsByChatId(chatId)) {
+            userService.addNewUser(chatId);
 
-        Coupon coupon = couponService.findByName(helloCouponName);
+            sm = SendMessage.builder()
+                    .chatId(chatId)
+                    .text(BotResponses.startMessage()).build();
 
-        addCouponButton(sm, coupon, "Активировать приветственный купон", "couponPreview_");
+            Coupon coupon = couponService.findByName(helloCouponName);
+
+            addCouponButton(sm, coupon, "Активировать приветственный купон", "couponPreview_");
+        }
 
         return sm;
     }
@@ -58,7 +63,7 @@ public class BotService {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
-        if(coupon != null) {
+        if (coupon != null) {
             var sm = SendMessage.builder()
                     .chatId(chatId)
                     .text(BotResponses.couponAcceptMessage(couponTimeInMinutes)).build();
@@ -162,5 +167,20 @@ public class BotService {
         markup.setKeyboard(keyboard);
 
         return markup;
+    }
+
+    public void processRefLink(final String command, final Long chatId) {
+        if (!command.endsWith("/start")) {
+            String refCode = command.substring(7);
+            userService.addNewRefUser(Long.parseLong(refCode), chatId);
+        }
+    }
+
+    public SendMessage getReferralLinkForUser(final Long chatId) {
+        String refLink = "https://t.me/" + botUsername + "?start=" + chatId;
+
+        return SendMessage.builder()
+                .chatId(chatId)
+                .text(BotResponses.referralMessage(refLink, userService.findByChatId(chatId).getReferralCount())).build();
     }
 }

@@ -16,9 +16,6 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageTe
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
-import java.util.Timer;
-import java.util.TimerTask;
-
 @Component
 public class LedikomBot extends TelegramLongPollingBot {
 
@@ -63,6 +60,8 @@ public class LedikomBot extends TelegramLongPollingBot {
 
     }
 
+//    kupony - Мои активные купоны
+//    moya_ssylka - Моя реферальная ссылка
     public void processMessage(String command, Long chatId) {
 
         if(command.startsWith("couponPreview_")) {
@@ -73,11 +72,16 @@ public class LedikomBot extends TelegramLongPollingBot {
             generateCouponIfNotUsed(command, chatId);
             return;
         }
+        if (command.startsWith("/start")) {
+            botService.processRefLink(command, chatId);
+            sendMessage(botService.addUserAndGenerateHelloMessage(chatId));
+            return;
+        }
 
         switch (command) {
-            case "/start" -> sendMessage(botService.addUserAndGenerateHelloMessage(chatId));
+            case "/kupony" -> sendMessage(botService.showAllCoupons(chatId));
 
-            case "/activecoupons" -> sendMessage(botService.showAllCoupons(chatId));
+            case "/moya_ssylka" -> sendMessage(botService.getReferralLinkForUser(chatId));
 
             case "/setnotification" -> System.out.println("setnotification");
 
@@ -124,7 +128,9 @@ public class LedikomBot extends TelegramLongPollingBot {
 
     private void sendMessage(SendMessage sm) {
         try {
-            execute(sm);
+            if (sm != null) {
+                execute(sm);
+            }
         } catch (Exception e) {
             log.trace(e.getMessage());
         }

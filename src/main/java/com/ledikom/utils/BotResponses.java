@@ -26,4 +26,8 @@ public final class BotResponses {
         // TODO: update to normal format
         return "Coupon used!!!!!!!!!!";
     }
+
+    public static String referralMessage(final String refLink, final int referralCount) {
+        return "Ваша реферальная ссылка:\n\n\n" + refLink + "\n\n\nКоличество приглашенных вами пользователей: " + referralCount + "\n\n\nПоделитесь с другом и получайте бонусы: НАПИСАТЬ КАКИЕ БОНУСЫ И ДОАБВИТЬ АВТО ФУНКЦИОНАЛ";
+    }
 }

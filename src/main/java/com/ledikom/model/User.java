@@ -21,10 +21,12 @@ public class User {
     private Long id;
     private Long chatId;
     private Integer referralCount;
+    private Boolean receiveNews;
 
-    public User(final Long chatId, final Integer referralCount) {
+    public User(final Long chatId, final Integer referralCount, final Boolean receiveNews) {
         this.chatId = chatId;
         this.referralCount = referralCount;
+        this.receiveNews = receiveNews;
     }
 
     @ManyToMany(fetch = FetchType.EAGER)

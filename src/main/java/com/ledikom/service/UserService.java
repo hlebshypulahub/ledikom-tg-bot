@@ -12,6 +12,7 @@ import java.util.List;
 @Service
 public class UserService {
     private static final int INIT_REFERRAL_COUNT = 0;
+    private static boolean INIT_RECEIVE_NEWS = true;
 
     private final UserRepository userRepository;
     private final CouponService couponService;
@@ -30,7 +31,7 @@ public class UserService {
     }
 
     public void addNewUser(final Long chatId) {
-        User user = new User(chatId, INIT_REFERRAL_COUNT);
+        User user = new User(chatId, INIT_REFERRAL_COUNT, INIT_RECEIVE_NEWS);
         userRepository.save(user);
 
         couponService.addCouponsToUser(user);

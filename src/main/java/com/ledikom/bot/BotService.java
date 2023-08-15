@@ -183,4 +183,14 @@ public class BotService {
                 .chatId(chatId)
                 .text(BotResponses.referralMessage(refLink, userService.findByChatId(chatId).getReferralCount())).build();
     }
+
+    public SendMessage generateTriggerReceiveNewsMessage(final Long chatId) {
+        User user = userService.findByChatId(chatId);
+        user.setReceiveNews(!user.getReceiveNews());
+        userService.saveUser(user);
+
+        return SendMessage.builder()
+                .chatId(chatId)
+                .text("Подписка на рассылку новостей и акций " + (user.getReceiveNews() ? "включена." : "отключена.")).build();
+    }
 }

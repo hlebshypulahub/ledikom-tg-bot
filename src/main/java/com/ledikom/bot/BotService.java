@@ -1,5 +1,6 @@
 package com.ledikom.bot;
 
+import com.ledikom.callback.*;
 import com.ledikom.model.Coupon;
 import com.ledikom.model.User;
 import com.ledikom.model.UserCouponKey;
@@ -11,9 +12,14 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.File;
+import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -28,10 +34,12 @@ public class BotService {
 
     @Value("${hello-coupon.name}")
     private String helloCouponName;
-    @Value("${coupon.time-in-minutes}")
-    private int couponTimeInMinutes;
-    @Value("${bot_username}")
+    @Value("${coupon.duration-in-minutes}")
+    private int couponDurationInMinutes;
+    @Value("${bot.username}")
     private String botUsername;
+    @Value("${bot.token}")
+    private String botToken;
 
     private final UserService userService;
     private final CouponService couponService;
@@ -41,49 +49,53 @@ public class BotService {
         this.couponService = couponService;
     }
 
-    public SendMessage addUserAndGenerateHelloMessage(final long chatId) {
-        SendMessage sm = null;
-
+    public void addUserAndGenerateHelloMessage(final SendMessageCallback sendMessageCallback, final long chatId) {
         if (!userService.userExistsByChatId(chatId)) {
             userService.addNewUser(chatId);
-
-            sm = SendMessage.builder()
-                    .chatId(chatId)
-                    .text(BotResponses.startMessage()).build();
-
+            var sm = buildSendMessage(BotResponses.startMessage(), chatId);
             Coupon coupon = couponService.findByName(helloCouponName);
-
             addCouponButton(sm, coupon, "Активировать приветственный купон", "couponPreview_");
+            sendMessageCallback.execute(sm);
         }
-
-        return sm;
     }
 
-    public SendMessage generateCouponAcceptMessageIfNotUsed(final String couponCommand, final long chatId) {
+    public void generateCouponAcceptMessageIfNotUsed(final SendMessageCallback sendMessageCallback,
+                                                     final String couponCommand, final long chatId) {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
         if (coupon != null) {
-            var sm = SendMessage.builder()
-                    .chatId(chatId)
-                    .text(BotResponses.couponAcceptMessage(couponTimeInMinutes)).build();
+            var sm = buildSendMessage(BotResponses.couponAcceptMessage(couponDurationInMinutes), chatId);
             addCouponButton(sm, coupon, "Активировать", "couponAccept_");
-            return sm;
+            sendMessageCallback.execute(sm);
+        } else {
+            var sm = buildSendMessage(BotResponses.couponUsedMessage(), chatId);
+            sendMessageCallback.execute(sm);
         }
-
-        return SendMessage.builder()
-                .chatId(chatId)
-                .text(BotResponses.couponUsedMessage()).build();
     }
 
-    public Coupon generateCouponIfNotUsed(final String couponCommand, final Long chatId) {
+    public void generateCouponIfNotUsed(final SendMessageCallback sendMessageCallback,
+                                        final SendCouponByChatIdCallback sendCouponByChatIdCallback,
+                                        final String couponCommand, final Long chatId) {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
-        if (coupon != null) {
+        if (coupon == null) {
+            var sm = buildSendMessage(BotResponses.couponUsedMessage(), chatId);
+            sendMessageCallback.execute(sm);
+        } else {
+            String couponTextWithUniqueSign = generateSignedCoupon(coupon);
+            var sm = buildSendMessage(getInitialCouponText(couponTextWithUniqueSign), chatId);
+            UserCouponKey userCouponKey = sendCouponByChatIdCallback.execute(sm);
+            addCouponToMap(userCouponKey, couponTextWithUniqueSign);
             userService.removeCouponFromUser(user, coupon);
         }
-        return coupon;
+    }
+
+    private String getInitialCouponText(final String couponTextWithUniqueSign) {
+        return "Времени осталось: " + convertIntToTimeInt(couponDurationInMinutes) + ":00" +
+                "\n\n" +
+                couponTextWithUniqueSign;
     }
 
     private void addCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText, final String callbackData) {
@@ -100,11 +112,11 @@ public class BotService {
     }
 
     public void addCouponToMap(final UserCouponKey userCouponKey, final String couponText) {
-        long expiryTimestamp = System.currentTimeMillis() + couponTimeInMinutes * 60 * 1000L;
+        long expiryTimestamp = System.currentTimeMillis() + couponDurationInMinutes * 60 * 1000L;
         userCoupons.put(userCouponKey, new UserCouponRecord(expiryTimestamp, couponText));
     }
 
-    public String generateCouponText(final UserCouponRecord userCouponRecord, final long timeLeftInSeconds) {
+    public String updateCouponText(final UserCouponRecord userCouponRecord, final long timeLeftInSeconds) {
         return "Времени осталось: " + timeLeftInSeconds / 60 + ":" + (timeLeftInSeconds % 60 < 10 ? "0" + timeLeftInSeconds % 60 : timeLeftInSeconds % 60) +
                 "\n\n" +
                 userCouponRecord.getText();
@@ -112,7 +124,7 @@ public class BotService {
 
     public String generateSignedCoupon(final Coupon coupon) {
         ZoneId moscowZone = ZoneId.of("Europe/Moscow");
-        LocalDateTime zonedDateTime = LocalDateTime.now(moscowZone).plusMinutes(couponTimeInMinutes);
+        LocalDateTime zonedDateTime = LocalDateTime.now(moscowZone).plusMinutes(couponDurationInMinutes);
 
         String timeSign = convertIntToTimeInt(zonedDateTime.getDayOfMonth()) + "." + convertIntToTimeInt(zonedDateTime.getMonthValue()) + "." + zonedDateTime.getYear()
                 + " " + convertIntToTimeInt(zonedDateTime.getHour()) + ":" + convertIntToTimeInt(zonedDateTime.getMinute()) + ":" + convertIntToTimeInt(zonedDateTime.getSecond());
@@ -131,24 +143,18 @@ public class BotService {
         userCoupons.entrySet().removeIf(userCoupon -> userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 5000);
     }
 
-    public SendMessage showAllCoupons(final Long chatId) {
+    public void showAllCoupons(final SendMessageCallback sendMessageCallback, final Long chatId) {
         User user = userService.findByChatId(chatId);
         Set<Coupon> userCoupons = user.getCoupons();
-        var sm = new SendMessage();
 
+        SendMessage sm;
         if (userCoupons.isEmpty()) {
-            sm = SendMessage.builder()
-                    .chatId(chatId)
-                    .text("У вас нету купонов").build();
+            sm = buildSendMessage("У вас нету купонов", chatId);
         } else {
-            sm = SendMessage.builder()
-                    .chatId(chatId)
-                    .text("Ваши купоны:").build();
-
+            sm = buildSendMessage("Ваши купоны:", chatId);
             sm.setReplyMarkup(createListOfCoupons(userCoupons));
         }
-
-        return sm;
+        sendMessageCallback.execute(sm);
     }
 
     private InlineKeyboardMarkup createListOfCoupons(final Set<Coupon> coupons) {
@@ -176,21 +182,54 @@ public class BotService {
         }
     }
 
-    public SendMessage getReferralLinkForUser(final Long chatId) {
+    public void getReferralLinkForUser(final SendMessageCallback sendMessageCallback, final Long chatId) {
         String refLink = "https://t.me/" + botUsername + "?start=" + chatId;
-
-        return SendMessage.builder()
-                .chatId(chatId)
-                .text(BotResponses.referralMessage(refLink, userService.findByChatId(chatId).getReferralCount())).build();
+        sendMessageCallback.execute(buildSendMessage(BotResponses.referralMessage(refLink, userService.findByChatId(chatId).getReferralCount()), chatId));
     }
 
-    public SendMessage generateTriggerReceiveNewsMessage(final Long chatId) {
+    public void generateTriggerReceiveNewsMessage(final SendMessageCallback sendMessageCallback, final Long chatId) {
         User user = userService.findByChatId(chatId);
         user.setReceiveNews(!user.getReceiveNews());
         userService.saveUser(user);
+        sendMessageCallback.execute(buildSendMessage("Подписка на рассылку новостей и акций " + (user.getReceiveNews() ? "включена." : "отключена."), chatId));
+    }
 
+    public void processAdminMessage(final SendMessageCallback sendMessageCallback,
+                                    final SendMessageWithPhotoByChatIdCallback sendMessageWithPhotoByChatIdCallback,
+                                    final String text, final String photoPathReceivedFromAdmin) {
+        List<String> splitString = Arrays.stream(text.split("&")).map(String::trim).toList();
+        if (splitString.get(0).equalsIgnoreCase("news")) {
+            List<User> usersToSendNews = userService.getAllUsersToSendNews();
+            if (photoPathReceivedFromAdmin == null || photoPathReceivedFromAdmin.isBlank()) {
+                usersToSendNews.forEach(user -> sendMessageCallback.execute(SendMessage.builder()
+                        .chatId(user.getChatId())
+                        .text(splitString.get(1)).build()));
+            } else {
+                usersToSendNews.forEach(user -> sendMessageWithPhotoByChatIdCallback.execute(photoPathReceivedFromAdmin, splitString.get(1), user.getChatId()));
+            }
+        }
+    }
+
+    public String getPhotoFromUpdate(final Message msg, final GetFileFromBotCallback getFileFromBotCallback) {
+        PhotoSize photo = msg.getPhoto().stream()
+                .max(Comparator.comparingInt(PhotoSize::getWidth))
+                .orElse(null);
+        if (photo != null) {
+            GetFile getFileRequest = new GetFile();
+            getFileRequest.setFileId(photo.getFileId());
+            try {
+                File file = getFileFromBotCallback.execute(getFileRequest);
+                return "https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath();
+            } catch (TelegramApiException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return null;
+    }
+
+    private SendMessage buildSendMessage(String text, long chatId) {
         return SendMessage.builder()
                 .chatId(chatId)
-                .text("Подписка на рассылку новостей и акций " + (user.getReceiveNews() ? "включена." : "отключена.")).build();
+                .text(text).build();
     }
 }

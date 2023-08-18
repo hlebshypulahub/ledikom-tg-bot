@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -60,5 +61,9 @@ public class UserService {
 
     public boolean userExistsByChatId(final long chatId) {
         return userRepository.findByChatId(chatId).isPresent();
+    }
+
+    public List<User> getAllUsersToSendNews() {
+        return userRepository.findAll().stream().filter(User::getReceiveNews).collect(Collectors.toList());
     }
 }

@@ -1,6 +1,6 @@
 package com.ledikom.callback;
 
 @FunctionalInterface
-public interface SendMessageWithPhotoByChatIdCallback {
+public interface SendMessageWithPhotoCallback {
     void execute(String imageUrl, String caption, Long chatId);
 }

@@ -75,7 +75,7 @@ public class BotService {
     }
 
     public void generateCouponIfNotUsed(final SendMessageCallback sendMessageCallback,
-                                        final SendCouponByChatIdCallback sendCouponByChatIdCallback,
+                                        final SendCouponCallback sendCouponCallback,
                                         final String couponCommand, final Long chatId) {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
@@ -86,7 +86,7 @@ public class BotService {
         } else {
             String couponTextWithUniqueSign = generateSignedCoupon(coupon);
             var sm = buildSendMessage(getInitialCouponText(couponTextWithUniqueSign), chatId);
-            UserCouponKey userCouponKey = sendCouponByChatIdCallback.execute(sm);
+            UserCouponKey userCouponKey = sendCouponCallback.execute(sm);
             addCouponToMap(userCouponKey, couponTextWithUniqueSign);
             userService.removeCouponFromUser(user, coupon);
         }
@@ -195,17 +195,15 @@ public class BotService {
     }
 
     public void processAdminMessage(final SendMessageCallback sendMessageCallback,
-                                    final SendMessageWithPhotoByChatIdCallback sendMessageWithPhotoByChatIdCallback,
+                                    final SendMessageWithPhotoCallback sendMessageWithPhotoCallback,
                                     final String text, final String photoPathReceivedFromAdmin) {
         List<String> splitString = Arrays.stream(text.split("&")).map(String::trim).toList();
         if (splitString.get(0).equalsIgnoreCase("news")) {
             List<User> usersToSendNews = userService.getAllUsersToSendNews();
             if (photoPathReceivedFromAdmin == null || photoPathReceivedFromAdmin.isBlank()) {
-                usersToSendNews.forEach(user -> sendMessageCallback.execute(SendMessage.builder()
-                        .chatId(user.getChatId())
-                        .text(splitString.get(1)).build()));
+                usersToSendNews.forEach(user -> sendMessageCallback.execute(buildSendMessage(splitString.get(1), user.getChatId())));
             } else {
-                usersToSendNews.forEach(user -> sendMessageWithPhotoByChatIdCallback.execute(photoPathReceivedFromAdmin, splitString.get(1), user.getChatId()));
+                usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(photoPathReceivedFromAdmin, splitString.get(1), user.getChatId()));
             }
         }
     }

@@ -38,18 +38,18 @@ public class LedikomBot extends TelegramLongPollingBot {
     private final BotService botService;
     private String photoPathReceivedFromAdmin;
 
-    private final SendMessageWithPhotoByChatIdCallback sendMessageWithPhotoByChatIdCallback;
+    private final SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
     private final GetFileFromBotCallback getFileFromBotCallback;
-    private final SendCouponByChatIdCallback sendCouponByChatIdCallback;
+    private final SendCouponCallback sendCouponCallback;
     private final SendMessageCallback sendMessageCallback;
 
     private final Logger log = LoggerFactory.getLogger(LedikomBot.class);
 
     public LedikomBot(BotService botService) {
         this.botService = botService;
-        this.sendMessageWithPhotoByChatIdCallback = this::sendImageWithCaption;
+        this.sendMessageWithPhotoCallback = this::sendImageWithCaption;
         this.getFileFromBotCallback = this::getFileFromBot;
-        this.sendCouponByChatIdCallback = this::sendCoupon;
+        this.sendCouponCallback = this::sendCoupon;
         this.sendMessageCallback = this::sendMessage;
     }
 
@@ -95,7 +95,10 @@ public class LedikomBot extends TelegramLongPollingBot {
             text = msg.getText();
         }
 
-        botService.processAdminMessage(sendMessageCallback, sendMessageWithPhotoByChatIdCallback, text, photoPathReceivedFromAdmin);
+        botService.processAdminMessage(sendMessageCallback, sendMessageWithPhotoCallback, text, photoPathReceivedFromAdmin);
+
+        // reset
+        photoPathReceivedFromAdmin = null;
     }
 
     private File getFileFromBot(final GetFile getFileRequest) throws TelegramApiException {
@@ -112,7 +115,7 @@ public class LedikomBot extends TelegramLongPollingBot {
             return;
         }
         if (command.startsWith("couponAccept_")) {
-            botService.generateCouponIfNotUsed(sendMessageCallback, sendCouponByChatIdCallback, command, chatId);
+            botService.generateCouponIfNotUsed(sendMessageCallback, sendCouponCallback, command, chatId);
             return;
         }
         if (command.startsWith("/start")) {

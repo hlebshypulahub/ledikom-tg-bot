@@ -1,37 +1,89 @@
 package com.ledikom.bot;
 
-import com.ledikom.model.Coupon;
-import com.ledikom.model.User;
+import com.ledikom.callback.*;
 import com.ledikom.model.UserCouponKey;
-import com.ledikom.model.UserCouponRecord;
-import com.ledikom.utils.BotResponses;
+import com.ledikom.service.BotService;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.File;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.function.Predicate;
+
 
 @Component
 public class LedikomBot extends TelegramLongPollingBot {
 
-    @Value("${bot_username}")
+    @Value("${bot.username}")
     private String botUsername;
-    @Value("${bot_token}")
+    @Value("${bot.token}")
     private String botToken;
-    @Value("${tech_admin_id}")
-    private Long techAdminId;
-    @Value("${coupon.time-in-minutes}")
-    private int couponTimeInMinutes;
-    private final BotService botService;
-    private final Logger log = LoggerFactory.getLogger(LedikomBot.class);
+    @Value("${admin.id}")
+    private Long adminId;
 
-    public LedikomBot(BotService botService) {
+    private final BotService botService;
+
+    private static final Logger log = LoggerFactory.getLogger(LedikomBot.class);
+    private static final Map<Predicate<String>, ChatIdCallback> chatIdActions = new HashMap<>();
+    private static final Map<Predicate<String>, CommandWithChatIdCallback> commandWithChatIdActions = new HashMap<>();
+
+    public LedikomBot(@Lazy final BotService botService) {
         this.botService = botService;
+    }
+
+    @PostConstruct
+    public void fillActionsMap() {
+        commandWithChatIdActions.put(cmd -> cmd.startsWith("couponPreview_"),
+                this.botService::sendCouponAcceptMessageIfNotUsed);
+        commandWithChatIdActions.put(cmd -> cmd.startsWith("couponAccept_"),
+                this.botService::sendCouponIfNotUsed);
+        commandWithChatIdActions.put(cmd -> cmd.startsWith("/start"),
+                this.botService::processRefLinkOnFollow);
+        chatIdActions.put(cmd -> cmd.equals("/kupony"),
+                this.botService::sendAllCouponsList);
+        chatIdActions.put(cmd -> cmd.equals("/moya_ssylka"),
+                this.botService::sendReferralLinkForUser);
+        chatIdActions.put(cmd -> cmd.equals("/vkl_otkl_rassylku"),
+                this.botService::sendTriggerReceiveNewsMessage);
+    }
+
+    public SendMessageWithPhotoCallback getSendMessageWithPhotoCallback() {
+        return this::sendImageWithCaption;
+    }
+
+    public GetFileFromBotCallback getGetFileFromBotCallback() {
+        return this::getFileFromBot;
+    }
+
+    public SendCouponCallback getSendCouponCallback() {
+        return this::sendCoupon;
+    }
+
+    public SendMessageCallback getSendMessageCallback() {
+        return this::sendMessage;
+    }
+
+    public EditMessageCallback getEditMessageCallback() {
+        return this::editMessage;
     }
 
     @Override
@@ -47,85 +99,61 @@ public class LedikomBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
 
-        if (update.hasMessage() && update.getMessage().hasText()) {
+        if (update.hasMessage()) {
             var msg = update.getMessage();
             var chatId = msg.getChatId();
-            processMessage(msg.getText(), chatId);
-
+            if (Objects.equals(chatId, adminId)) {
+                processAdminMessage(update);
+            }
+            if (msg.hasText()) {
+                processMessage(msg.getText(), chatId);
+            }
         } else if (update.hasCallbackQuery()) {
             var qry = update.getCallbackQuery();
             var chatId = qry.getMessage().getChatId();
             processMessage(qry.getData(), chatId);
         }
-
     }
 
-//    kupony - Мои активные купоны
-//    moya_ssylka - Моя реферальная ссылка
-//    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
-    public void processMessage(String command, Long chatId) {
-
-        if(command.startsWith("couponPreview_")) {
-            generateCouponAcceptMessageIfNotUsed(command, chatId);
-            return;
-        }
-        if (command.startsWith("couponAccept_")) {
-            generateCouponIfNotUsed(command, chatId);
-            return;
-        }
-        if (command.startsWith("/start")) {
-            botService.processRefLink(command, chatId);
-            sendMessage(botService.addUserAndGenerateHelloMessage(chatId));
-            return;
-        }
-
-        switch (command) {
-            case "/kupony" -> sendMessage(botService.showAllCoupons(chatId));
-
-            case "/moya_ssylka" -> sendMessage(botService.getReferralLinkForUser(chatId));
-
-            case "/vkl_otkl_rassylku" -> sendMessage(botService.generateTriggerReceiveNewsMessage(chatId));
-
-            case "/setnotification" -> System.out.println("setnotification");
-
-            case "/deletenotification" -> System.out.println("deletenotification");
-
-            case "/showpharmacies" -> System.out.println("pharmacies");
-
-            default -> {
-                log.error("Illegal State", new IllegalStateException());
-                sendMessage(new IllegalStateException().toString(), techAdminId);
-            }
-        }
+    private void processAdminMessage(final Update update) {
+        botService.processAdminMessage(update);
     }
 
-    private void generateCouponIfNotUsed(final String couponCommand, final Long chatId) {
-        Coupon coupon = botService.generateCouponIfNotUsed(couponCommand, chatId);
-
-        if (coupon == null) {
-            sendMessage(BotResponses.couponUsedMessage(), chatId);
+    //    kupony - Мои активные купоны
+    //    moya_ssylka - Моя реферальная ссылка
+    //    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
+    private void processMessage(String command, Long chatId) {
+        Optional<ChatIdCallback> chatIdCallback = chatIdActions.entrySet().stream()
+                .filter(entry -> entry.getKey().test(command))
+                .map(Map.Entry::getValue)
+                .findFirst();
+        boolean isChatIdAction = chatIdCallback.isPresent();
+        if (isChatIdAction) {
+            chatIdCallback.get().execute(chatId);
         } else {
-            String couponTextWithUniqueSign = botService.generateSignedCoupon(coupon);
-            UserCouponKey userCouponKey = sendCoupon("Времени осталось: " + couponTimeInMinutes + ":00" +
-                    "\n\n" +
-                    couponTextWithUniqueSign, chatId);
-            botService.addCouponToMap(userCouponKey, couponTextWithUniqueSign);
+            commandWithChatIdActions.entrySet().stream()
+                    .filter(entry -> entry.getKey().test(command))
+                    .map(Map.Entry::getValue)
+                    .findFirst()
+                    .ifPresent(action -> action.execute(command, chatId));
         }
     }
 
-    private void generateCouponAcceptMessageIfNotUsed(final String couponCommand, final long chatId) {
-        sendMessage(botService.generateCouponAcceptMessageIfNotUsed(couponCommand, chatId));
+    private File getFileFromBot(final GetFile getFileRequest) throws TelegramApiException {
+        return execute(getFileRequest);
     }
 
-    private void sendMessage(String botReply, Long chatId) {
-        var sm = SendMessage.builder()
-                .chatId(chatId)
-                .text(botReply).build();
-
+    private void sendImageWithCaption(String imageUrl, String caption, Long chatId) {
         try {
-            execute(sm);
-        } catch (Exception e) {
-            log.trace(e.getMessage());
+            InputStream imageStream = new URL(imageUrl).openStream();
+            InputFile inputFile = new InputFile(imageStream, "image.jpg");
+            SendPhoto sendPhoto = new SendPhoto();
+            sendPhoto.setChatId(chatId.toString());
+            sendPhoto.setPhoto(inputFile);
+            sendPhoto.setCaption(caption);
+            execute(sendPhoto);
+        } catch (IOException | TelegramApiException e) {
+            e.printStackTrace();
         }
     }
 
@@ -139,18 +167,14 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-    private UserCouponKey sendCoupon(String couponText, Long chatId) {
-        var sm = SendMessage.builder()
-                .chatId(chatId)
-                .text(couponText).build();
+    private UserCouponKey sendCoupon(SendMessage sm) {
         try {
             Message sentMessage = execute(sm);
             return new UserCouponKey(sentMessage.getChatId(), sentMessage.getMessageId());
         } catch (Exception e) {
             log.trace(e.getMessage());
+            return null;
         }
-
-        return null;
     }
 
     private void editMessage(final Long chatId, final Integer messageId, final String editedMessage) {
@@ -165,22 +189,5 @@ public class LedikomBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.trace(e.getMessage());
         }
-    }
-
-    private void updateCouponTimerAndMessage(final UserCouponKey userCouponKey, final UserCouponRecord userCouponRecord) {
-        long timeLeftInSeconds = (userCouponRecord.getExpiryTimestamp() - System.currentTimeMillis()) / 1000;
-
-        if (timeLeftInSeconds >= 0) {
-            editMessage(userCouponKey.getChatId(), userCouponKey.getMessageId(), botService.generateCouponText(userCouponRecord, timeLeftInSeconds));
-        } else {
-            editMessage(userCouponKey.getChatId(), userCouponKey.getMessageId(), "Время вашего купона истекло.");
-        }
-
-    }
-
-    @Scheduled(fixedRate = 1000)
-    public void processCouponsInMap() {
-        BotService.userCoupons.forEach(this::updateCouponTimerAndMessage);
-        botService.removeExpiredCouponsFromMap();
     }
 }

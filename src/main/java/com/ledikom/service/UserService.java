@@ -5,14 +5,14 @@ import com.ledikom.model.User;
 import com.ledikom.repository.UserRepository;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
     private static final int INIT_REFERRAL_COUNT = 0;
-    private static boolean INIT_RECEIVE_NEWS = true;
+    private static final boolean INIT_RECEIVE_NEWS = true;
 
     private final UserRepository userRepository;
     private final CouponService couponService;
@@ -33,7 +33,6 @@ public class UserService {
     public void addNewUser(final Long chatId) {
         User user = new User(chatId, INIT_REFERRAL_COUNT, INIT_RECEIVE_NEWS);
         userRepository.save(user);
-
         couponService.addCouponsToUser(user);
     }
 
@@ -51,7 +50,8 @@ public class UserService {
     }
 
     public void addNewRefUser(final long chatIdFromRefLink, final long chatId) {
-        if (chatIdFromRefLink != chatId && !userExistsByChatId(chatId)) {
+        final boolean selfLinkOrUserExists = chatIdFromRefLink == chatId || userExistsByChatId(chatId);
+        if (!selfLinkOrUserExists) {
             User user = userRepository.findByChatId(chatIdFromRefLink).orElseThrow(() -> new RuntimeException("User not found"));
             user.setReferralCount(user.getReferralCount() + 1);
             userRepository.save(user);
@@ -60,5 +60,9 @@ public class UserService {
 
     public boolean userExistsByChatId(final long chatId) {
         return userRepository.findByChatId(chatId).isPresent();
+    }
+
+    public List<User> getAllUsersToReceiveNews() {
+        return userRepository.findAll().stream().filter(User::getReceiveNews).collect(Collectors.toList());
     }
 }

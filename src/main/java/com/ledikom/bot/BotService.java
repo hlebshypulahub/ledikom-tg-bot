@@ -11,12 +11,14 @@ import com.ledikom.utils.BotResponses;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
+import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -25,28 +27,63 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
 
-@Service
 @Setter
 @Getter
 public class BotService {
 
     public static final Map<UserCouponKey, UserCouponRecord> userCoupons = new HashMap<>();
 
-    @Value("${hello-coupon.name}")
-    private String helloCouponName;
-    @Value("${coupon.duration-in-minutes}")
-    private int couponDurationInMinutes;
-    @Value("${bot.username}")
-    private String botUsername;
-    @Value("${bot.token}")
-    private String botToken;
+    private static BotService INSTANCE;
+
+    private final String helloCouponName;
+    private final int couponDurationInMinutes;
+    private final String botUsername;
+    private final String botToken;
 
     private final UserService userService;
     private final CouponService couponService;
 
-    public BotService(final UserService userService, final CouponService couponService) {
+    private final SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
+    private final GetFileFromBotCallback getFileFromBotCallback;
+    private final SendCouponCallback sendCouponCallback;
+    private final SendMessageCallback sendMessageCallback;
+    private final EditMessageCallback editMessageCallback;
+
+    private BotService(final UserService userService, final CouponService couponService,
+                       final SendMessageWithPhotoCallback sendMessageWithPhotoCallback,
+                       final GetFileFromBotCallback getFileFromBotCallback,
+                       final SendCouponCallback sendCouponCallback,
+                       final SendMessageCallback sendMessageCallback,
+                       final EditMessageCallback editMessageCallback,
+                       final String botToken, final String botUsername,
+                       final String helloCouponName, final int couponDurationInMinutes) {
         this.userService = userService;
         this.couponService = couponService;
+        this.sendMessageWithPhotoCallback = sendMessageWithPhotoCallback;
+        this.getFileFromBotCallback = getFileFromBotCallback;
+        this.sendCouponCallback = sendCouponCallback;
+        this.sendMessageCallback = sendMessageCallback;
+        this.editMessageCallback = editMessageCallback;
+        this.botUsername = botUsername;
+        this.botToken = botToken;
+        this.helloCouponName = helloCouponName;
+        this.couponDurationInMinutes = couponDurationInMinutes;
+    }
+
+    public static BotService getInstance(final UserService userService, final CouponService couponService,
+                                         final SendMessageWithPhotoCallback sendMessageWithPhotoCallback,
+                                         final GetFileFromBotCallback getFileFromBotCallback,
+                                         final SendCouponCallback sendCouponCallback,
+                                         final SendMessageCallback sendMessageCallback,
+                                         final EditMessageCallback editMessageCallback,
+                                         final String botToken, final String botUsername,
+                                         final String helloCouponName, final int couponDurationInMinutes) {
+        if (INSTANCE == null) {
+            INSTANCE = new BotService(userService, couponService, sendMessageWithPhotoCallback,
+                    getFileFromBotCallback, sendCouponCallback, sendMessageCallback, editMessageCallback,
+                    botToken, botUsername, helloCouponName, couponDurationInMinutes);
+        }
+        return INSTANCE;
     }
 
     public void addUserAndGenerateHelloMessage(final SendMessageCallback sendMessageCallback, final long chatId) {
@@ -59,8 +96,7 @@ public class BotService {
         }
     }
 
-    public void generateCouponAcceptMessageIfNotUsed(final SendMessageCallback sendMessageCallback,
-                                                     final String couponCommand, final long chatId) {
+    public void generateCouponAcceptMessageIfNotUsed(final String couponCommand, final long chatId) {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
@@ -74,9 +110,7 @@ public class BotService {
         }
     }
 
-    public void generateCouponIfNotUsed(final SendMessageCallback sendMessageCallback,
-                                        final SendCouponCallback sendCouponCallback,
-                                        final String couponCommand, final Long chatId) {
+    public void generateCouponIfNotUsed(final String couponCommand, final Long chatId) {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
@@ -117,7 +151,7 @@ public class BotService {
     }
 
     public String updateCouponText(final UserCouponRecord userCouponRecord, final long timeLeftInSeconds) {
-        return "Времени осталось: " + timeLeftInSeconds / 60 + ":" + (timeLeftInSeconds % 60 < 10 ? "0" + timeLeftInSeconds % 60 : timeLeftInSeconds % 60) +
+        return "Времени осталось: " + convertIntToTimeInt(timeLeftInSeconds / 60) + ":" + convertIntToTimeInt(timeLeftInSeconds % 60) +
                 "\n\n" +
                 userCouponRecord.getText();
     }
@@ -135,15 +169,11 @@ public class BotService {
         return coupon.getText() + "\n\n" + sign;
     }
 
-    public String convertIntToTimeInt(int value) {
+    public String convertIntToTimeInt(long value) {
         return value < 10 ? "0" + value : "" + value;
     }
 
-    public void removeExpiredCouponsFromMap() {
-        userCoupons.entrySet().removeIf(userCoupon -> userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 5000);
-    }
-
-    public void showAllCoupons(final SendMessageCallback sendMessageCallback, final Long chatId) {
+    public void showAllCoupons(final Long chatId) {
         User user = userService.findByChatId(chatId);
         Set<Coupon> userCoupons = user.getCoupons();
 
@@ -175,35 +205,53 @@ public class BotService {
         return markup;
     }
 
-    public void processRefLink(final String command, final Long chatId) {
+    public void processRefLinkFollowing(final String command, final Long chatId) {
         if (!command.endsWith("/start")) {
             String refCode = command.substring(7);
             userService.addNewRefUser(Long.parseLong(refCode), chatId);
         }
+        addUserAndGenerateHelloMessage(sendMessageCallback, chatId);
     }
 
-    public void getReferralLinkForUser(final SendMessageCallback sendMessageCallback, final Long chatId) {
+    public void getReferralLinkForUser(final Long chatId) {
         String refLink = "https://t.me/" + botUsername + "?start=" + chatId;
         sendMessageCallback.execute(buildSendMessage(BotResponses.referralMessage(refLink, userService.findByChatId(chatId).getReferralCount()), chatId));
     }
 
-    public void generateTriggerReceiveNewsMessage(final SendMessageCallback sendMessageCallback, final Long chatId) {
+    public void generateTriggerReceiveNewsMessage(final Long chatId) {
         User user = userService.findByChatId(chatId);
         user.setReceiveNews(!user.getReceiveNews());
         userService.saveUser(user);
         sendMessageCallback.execute(buildSendMessage("Подписка на рассылку новостей и акций " + (user.getReceiveNews() ? "включена." : "отключена."), chatId));
     }
 
-    public void processAdminMessage(final SendMessageCallback sendMessageCallback,
-                                    final SendMessageWithPhotoCallback sendMessageWithPhotoCallback,
-                                    final String text, final String photoPathReceivedFromAdmin) {
+    public void processAdminMessage(final Update update) {
+        var msg = update.getMessage();
+        String text = "";
+        String photoPath = null;
+        if (msg.hasPhoto()) {
+            photoPath = getPhotoFromUpdate(msg, getFileFromBotCallback);
+            if (photoPath != null) {
+                text = msg.getCaption();
+            }
+        } else if (msg.hasText()) {
+            text = msg.getText();
+        }
+
+        executeAdminActionByCommand(sendMessageCallback, sendMessageWithPhotoCallback, text, photoPath);
+    }
+
+    private void executeAdminActionByCommand(final SendMessageCallback sendMessageCallback,
+                                             final SendMessageWithPhotoCallback sendMessageWithPhotoCallback,
+                                             final String text, final String photoPath) {
         List<String> splitString = Arrays.stream(text.split("&")).map(String::trim).toList();
+
         if (splitString.get(0).equalsIgnoreCase("news")) {
             List<User> usersToSendNews = userService.getAllUsersToSendNews();
-            if (photoPathReceivedFromAdmin == null || photoPathReceivedFromAdmin.isBlank()) {
+            if (photoPath == null || photoPath.isBlank()) {
                 usersToSendNews.forEach(user -> sendMessageCallback.execute(buildSendMessage(splitString.get(1), user.getChatId())));
             } else {
-                usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(photoPathReceivedFromAdmin, splitString.get(1), user.getChatId()));
+                usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(photoPath, splitString.get(1), user.getChatId()));
             }
         }
     }
@@ -229,5 +277,20 @@ public class BotService {
         return SendMessage.builder()
                 .chatId(chatId)
                 .text(text).build();
+    }
+
+    public void processCouponsInMap() {
+        userCoupons.forEach(this::updateCouponTimerAndMessage);
+        userCoupons.entrySet().removeIf(userCoupon -> userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 5000);
+    }
+
+    public void updateCouponTimerAndMessage(final UserCouponKey userCouponKey, final UserCouponRecord userCouponRecord) {
+
+        long timeLeftInSeconds = (userCouponRecord.getExpiryTimestamp() - System.currentTimeMillis()) / 1000;
+        if (timeLeftInSeconds >= 0) {
+            editMessageCallback.execute(userCouponKey.getChatId(), userCouponKey.getMessageId(), updateCouponText(userCouponRecord, timeLeftInSeconds));
+        } else {
+            editMessageCallback.execute(userCouponKey.getChatId(), userCouponKey.getMessageId(), "Время вашего купона истекло.");
+        }
     }
 }

@@ -2,14 +2,12 @@ package com.ledikom.bot;
 
 import com.ledikom.callback.*;
 import com.ledikom.model.UserCouponKey;
-import com.ledikom.service.CouponService;
-import com.ledikom.service.UserService;
+import com.ledikom.service.BotService;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
@@ -41,47 +39,51 @@ public class LedikomBot extends TelegramLongPollingBot {
     private String botToken;
     @Value("${admin.id}")
     private Long adminId;
-    @Value("${hello-coupon.name}")
-    private String helloCouponName;
-    @Value("${coupon.duration-in-minutes}")
-    private int couponDurationInMinutes;
 
-    private BotService botService;
-    private final UserService userService;
-    private final CouponService couponService;
+    private final BotService botService;
 
     private static final Logger log = LoggerFactory.getLogger(LedikomBot.class);
     private static final Map<Predicate<String>, ChatIdCallback> chatIdActions = new HashMap<>();
     private static final Map<Predicate<String>, CommandWithChatIdCallback> commandWithChatIdActions = new HashMap<>();
 
-    public LedikomBot(final UserService userService, final CouponService couponService) {
-        this.userService = userService;
-        this.couponService = couponService;
+    public LedikomBot(@Lazy final BotService botService) {
+        this.botService = botService;
     }
 
-    @Scheduled(fixedRate = 1000)
-    public void processCouponsInMap() {
-        Optional.ofNullable(botService).ifPresent(BotService::processCouponsInMap);
-    }
-
-    @Autowired
-    public void setBotService() {
-        this.botService = BotService.getInstance(userService, couponService,
-                this::sendImageWithCaption, this::getFileFromBot, this::sendCoupon, this::sendMessage, this::editMessage,
-                botToken, botUsername, helloCouponName, couponDurationInMinutes);
-
+    @PostConstruct
+    public void fillActionsMap() {
         commandWithChatIdActions.put(cmd -> cmd.startsWith("couponPreview_"),
-                botService::generateCouponAcceptMessageIfNotUsed);
+                this.botService::sendCouponAcceptMessageIfNotUsed);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("couponAccept_"),
-                botService::generateCouponIfNotUsed);
+                this.botService::sendCouponIfNotUsed);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("/start"),
-                botService::processRefLinkFollowing);
+                this.botService::processRefLinkOnFollow);
         chatIdActions.put(cmd -> cmd.equals("/kupony"),
-                botService::showAllCoupons);
+                this.botService::sendAllCouponsList);
         chatIdActions.put(cmd -> cmd.equals("/moya_ssylka"),
-                botService::getReferralLinkForUser);
+                this.botService::sendReferralLinkForUser);
         chatIdActions.put(cmd -> cmd.equals("/vkl_otkl_rassylku"),
-                botService::generateTriggerReceiveNewsMessage);
+                this.botService::sendTriggerReceiveNewsMessage);
+    }
+
+    public SendMessageWithPhotoCallback getSendMessageWithPhotoCallback() {
+        return this::sendImageWithCaption;
+    }
+
+    public GetFileFromBotCallback getGetFileFromBotCallback() {
+        return this::getFileFromBot;
+    }
+
+    public SendCouponCallback getSendCouponCallback() {
+        return this::sendCoupon;
+    }
+
+    public SendMessageCallback getSendMessageCallback() {
+        return this::sendMessage;
+    }
+
+    public EditMessageCallback getEditMessageCallback() {
+        return this::editMessage;
     }
 
     @Override

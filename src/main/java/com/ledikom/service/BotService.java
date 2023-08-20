@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
 import java.util.*;
 
@@ -29,6 +30,7 @@ public class BotService {
     private final CouponService couponService;
     private final BotUtilityService botUtilityService;
     private final AdminService adminService;
+    private final PollService pollService;
     private final LedikomBot ledikomBot;
 
     private SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
@@ -37,11 +39,12 @@ public class BotService {
     private SendMessageCallback sendMessageCallback;
     private EditMessageCallback editMessageCallback;
 
-    public BotService(final UserService userService, final CouponService couponService, final BotUtilityService botUtilityService, final AdminService adminService, @Lazy final LedikomBot ledikomBot) {
+    public BotService(final UserService userService, final CouponService couponService, final BotUtilityService botUtilityService, final AdminService adminService, final PollService pollService, @Lazy final LedikomBot ledikomBot) {
         this.userService = userService;
         this.couponService = couponService;
         this.botUtilityService = botUtilityService;
         this.adminService = adminService;
+        this.pollService = pollService;
         this.ledikomBot = ledikomBot;
     }
 
@@ -69,8 +72,13 @@ public class BotService {
         }
     }
 
-    public void processAdminMessage(final Update update) {
-        executeAdminActionByCommand(adminService.getMessageByAdmin(update, getFileFromBotCallback));
+    public void processAdminRequest(final Update update) {
+        RequestFromAdmin requestFromAdmin = adminService.getRequestFromAdmin(update, getFileFromBotCallback);
+        if (requestFromAdmin.isPoll()) {
+            executeAdminActionOnPollReceived(requestFromAdmin.getPoll());
+        } else {
+            executeAdminActionOnMessageReceived(requestFromAdmin);
+        }
     }
 
     public void processRefLinkOnFollow(final String command, final Long chatId) {
@@ -147,22 +155,33 @@ public class BotService {
         sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.triggerReceiveNewsMessage(user), chatId));
     }
 
-    private void executeAdminActionByCommand(final MessageFromAdmin messageFromAdmin) {
-        List<String> splitStringsFromAdminMessage = adminService.getSplitStrings(messageFromAdmin.getMessage());
+    private void sendNewsToUsers(final String photoPath, final List<String> splitStringsFromAdminMessage) {
+        NewsFromAdmin newsFromAdmin = adminService.getNewsByAdmin(splitStringsFromAdminMessage, photoPath);
+        List<User> usersToSendNews = userService.getAllUsersToReceiveNews();
 
-        if (splitStringsFromAdminMessage.get(0).equals(AdminMessageToken.NEWS.label)) {
-            sendNewsToUser(messageFromAdmin.getPhotoPath(), splitStringsFromAdminMessage);
+        if (newsFromAdmin.getPhotoPath() == null || newsFromAdmin.getPhotoPath().isBlank()) {
+            usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendMessage(newsFromAdmin.getNews(), user.getChatId())));
+        } else {
+            usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(photoPath, newsFromAdmin.getNews(), user.getChatId()));
         }
     }
 
-    private void sendNewsToUser(final String photoPath, final List<String> splitStringsFromAdminMessage) {
-        NewFromAdmin newFromAdmin = adminService.getNewsByAdmin(splitStringsFromAdminMessage, photoPath);
+    private void sendPollToUsers(final Poll poll) {
         List<User> usersToSendNews = userService.getAllUsersToReceiveNews();
+        usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendPoll(poll, user.getChatId())));
+    }
 
-        if (newFromAdmin.getPhotoPath() == null || newFromAdmin.getPhotoPath().isBlank()) {
-            usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendMessage(newFromAdmin.getNews(), user.getChatId())));
-        } else {
-            usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(photoPath, newFromAdmin.getNews(), user.getChatId()));
+    private void executeAdminActionOnMessageReceived(final RequestFromAdmin requestFromAdmin) {
+        List<String> splitStringsFromAdminMessage = adminService.getSplitStrings(requestFromAdmin.getMessage());
+
+        if (splitStringsFromAdminMessage.get(0).equals(AdminMessageToken.NEWS.label)) {
+            sendNewsToUsers(requestFromAdmin.getPhotoPath(), splitStringsFromAdminMessage);
         }
+    }
+
+    private void executeAdminActionOnPollReceived(final Poll poll) {
+        com.ledikom.model.Poll entityPoll = pollService.getPoll(poll);
+        pollService.savePoll(entityPoll);
+        sendPollToUsers(poll);
     }
 }

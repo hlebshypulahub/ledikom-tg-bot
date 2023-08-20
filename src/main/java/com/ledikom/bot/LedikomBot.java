@@ -10,7 +10,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
+import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethodMessage;
+import org.telegram.telegrambots.meta.api.methods.polls.SendPoll;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
@@ -18,16 +21,16 @@ import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.polls.Poll;
+import org.telegram.telegrambots.meta.api.objects.polls.PollOption;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 
 @Component
@@ -116,7 +119,7 @@ public class LedikomBot extends TelegramLongPollingBot {
     }
 
     private void processAdminMessage(final Update update) {
-        botService.processAdminMessage(update);
+        botService.processAdminRequest(update);
     }
 
     //    kupony - Мои активные купоны
@@ -157,10 +160,10 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendMessage(SendMessage sm) {
+    private void sendMessage(BotApiMethodMessage message) {
         try {
-            if (sm != null) {
-                execute(sm);
+            if (message != null) {
+                execute(message);
             }
         } catch (Exception e) {
             log.trace(e.getMessage());

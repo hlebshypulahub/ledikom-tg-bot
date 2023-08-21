@@ -14,7 +14,6 @@ import org.telegram.telegrambots.meta.api.objects.polls.PollOption;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.Comparator;
-import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
@@ -51,7 +50,7 @@ public class BotUtilityService {
                 .chatId(chatId)
                 .question(poll.getQuestion())
                 .options(poll.getOptions().stream().map(PollOption::getText).collect(Collectors.toList()))
-                .isAnonymous(poll.getIsAnonymous())
+                .isAnonymous(com.ledikom.model.Poll.IS_ANONYMOUS)
                 .type(poll.getType())
                 .allowMultipleAnswers(poll.getAllowMultipleAnswers())
                 .correctOptionId(poll.getCorrectOptionId())

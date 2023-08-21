@@ -14,6 +14,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Component
@@ -25,6 +26,8 @@ public class BotService {
     private String helloCouponName;
     @Value("${coupon.duration-in-minutes}")
     private int couponDurationInMinutes;
+    @Value("${admin.id}")
+    private Long adminId;
 
     private final UserService userService;
     private final CouponService couponService;
@@ -63,6 +66,12 @@ public class BotService {
         CouponService.userCoupons.entrySet().removeIf(userCoupon -> userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 5000);
     }
 
+    @Scheduled(fixedRate = 10000)
+    public void sendPollInfoToAdmin() {
+        SendMessage sm = botUtilityService.buildSendMessage(pollService.getPollsInfoForAdmin(), adminId);
+        sendMessageCallback.execute(sm);
+    }
+
     private void updateCouponTimerAndMessage(final UserCouponKey userCouponKey, final UserCouponRecord userCouponRecord) {
         long timeLeftInSeconds = (userCouponRecord.getExpiryTimestamp() - System.currentTimeMillis()) / 1000;
         if (timeLeftInSeconds >= 0) {
@@ -79,6 +88,10 @@ public class BotService {
         } else {
             executeAdminActionOnMessageReceived(requestFromAdmin);
         }
+    }
+
+    public void processPoll(final Poll poll) {
+        userService.processPoll(poll);
     }
 
     public void processRefLinkOnFollow(final String command, final Long chatId) {
@@ -180,7 +193,8 @@ public class BotService {
     }
 
     private void executeAdminActionOnPollReceived(final Poll poll) {
-        com.ledikom.model.Poll entityPoll = pollService.getPoll(poll);
+        com.ledikom.model.Poll entityPoll = pollService.tgPollToLedikomPoll(poll);
+        entityPoll.setLastVoteTimestamp(LocalDateTime.now());
         pollService.savePoll(entityPoll);
         sendPollToUsers(poll);
     }

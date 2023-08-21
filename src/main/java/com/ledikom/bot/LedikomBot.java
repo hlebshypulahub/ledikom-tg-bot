@@ -106,7 +106,7 @@ public class LedikomBot extends TelegramLongPollingBot {
             var msg = update.getMessage();
             var chatId = msg.getChatId();
             if (Objects.equals(chatId, adminId)) {
-                processAdminMessage(update);
+                botService.processAdminRequest(update);
             }
             if (msg.hasText()) {
                 processMessage(msg.getText(), chatId);
@@ -115,11 +115,9 @@ public class LedikomBot extends TelegramLongPollingBot {
             var qry = update.getCallbackQuery();
             var chatId = qry.getMessage().getChatId();
             processMessage(qry.getData(), chatId);
+        } else if (update.hasPoll()) {
+            botService.processPoll(update.getPoll());
         }
-    }
-
-    private void processAdminMessage(final Update update) {
-        botService.processAdminRequest(update);
     }
 
     //    kupony - Мои активные купоны

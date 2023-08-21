@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -13,25 +14,27 @@ import java.util.List;
 @Entity
 public class Poll {
 
+    @Transient
+    public static boolean IS_ANONYMOUS = true;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String question;
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "poll_option", joinColumns = @JoinColumn(name = "poll_id"))
     private List<PollOption> options;
     private Integer totalVoterCount;
-    private Boolean isAnonymous;
     private String type;
     private Boolean allowMultipleAnswers;
     private Integer correctOptionId;
     private String explanation;
+    private LocalDateTime lastVoteTimestamp;
 
-    public Poll(final String question, final List<PollOption> options, final Integer totalVoterCount, final Boolean isAnonymous, final String type, final Boolean allowMultipleAnswers, final Integer correctOptionId, final String explanation) {
+    public Poll(final String question, final List<PollOption> options, final Integer totalVoterCount, final String type, final Boolean allowMultipleAnswers, final Integer correctOptionId, final String explanation) {
         this.question = question;
         this.options = options;
         this.totalVoterCount = totalVoterCount;
-        this.isAnonymous = isAnonymous;
         this.type = type;
         this.allowMultipleAnswers = allowMultipleAnswers;
         this.correctOptionId = correctOptionId;

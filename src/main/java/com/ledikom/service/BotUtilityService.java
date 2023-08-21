@@ -4,13 +4,17 @@ import com.ledikom.callback.GetFileFromBotCallback;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
+import org.telegram.telegrambots.meta.api.methods.polls.SendPoll;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
+import org.telegram.telegrambots.meta.api.objects.polls.Poll;
+import org.telegram.telegrambots.meta.api.objects.polls.PollOption;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.Comparator;
+import java.util.stream.Collectors;
 
 @Component
 public class BotUtilityService {
@@ -39,5 +43,18 @@ public class BotUtilityService {
         return SendMessage.builder()
                 .chatId(chatId)
                 .text(text).build();
+    }
+
+    public SendPoll buildSendPoll(Poll poll, long chatId) {
+        return SendPoll.builder()
+                .chatId(chatId)
+                .question(poll.getQuestion())
+                .options(poll.getOptions().stream().map(PollOption::getText).collect(Collectors.toList()))
+                .isAnonymous(com.ledikom.model.Poll.IS_ANONYMOUS)
+                .type(poll.getType())
+                .allowMultipleAnswers(poll.getAllowMultipleAnswers())
+                .correctOptionId(poll.getCorrectOptionId())
+                .explanation(poll.getExplanation())
+                .build();
     }
 }

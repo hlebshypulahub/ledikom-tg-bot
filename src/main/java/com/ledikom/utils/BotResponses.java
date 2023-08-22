@@ -72,4 +72,16 @@ public final class BotResponses {
     public static String helloCoupon(final int helloCouponDiscount) {
         return "Приветственный купон -" + helloCouponDiscount + "% на вашу следующую покупку.";
     }
+
+    public static String noteAdded() {
+        return "Заметка записана, можете редактировать через меню";
+    }
+
+    public static String editNote() {
+        return "*Чтобы редактировать заметку скопируйте свою заметку из сообщения выше, вставьте в поле ввода, измените и отправте";
+    }
+
+    public static String addNote() {
+        return "Введите нотатку и вышлите сообщение";
+    }
 }

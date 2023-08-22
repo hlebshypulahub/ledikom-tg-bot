@@ -23,9 +23,15 @@ public class BotUtilityService {
     private String botToken;
 
     public String getPhotoFromUpdate(final Message msg, final GetFileFromBotCallback getFileFromBotCallback) {
-        PhotoSize photo = msg.getPhoto().stream()
-                .max(Comparator.comparingInt(PhotoSize::getWidth))
-                .orElse(null);
+        PhotoSize photo = null;
+        if (msg.hasPhoto()) {
+            photo = msg.getPhoto().stream()
+                    .max(Comparator.comparingInt(PhotoSize::getWidth))
+                    .orElse(null);
+        } else if (msg.hasDocument()) {
+            photo = msg.getDocument().getThumbnail();
+        }
+
         if (photo != null) {
             GetFile getFileRequest = new GetFile();
             getFileRequest.setFileId(photo.getFileId());

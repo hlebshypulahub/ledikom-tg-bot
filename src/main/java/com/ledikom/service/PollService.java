@@ -14,7 +14,7 @@ import java.util.stream.IntStream;
 @Service
 public class PollService {
 
-    @Value("${poll.active-time-in-days}")
+    @Value("${poll.active-time-days}")
     private int activeTimeInDays;
 
     private final PollRepository pollRepository;

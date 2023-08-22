@@ -3,6 +3,7 @@ package com.ledikom.service;
 import com.ledikom.callback.GetFileFromBotCallback;
 import com.ledikom.model.RequestFromAdmin;
 import com.ledikom.model.NewsFromAdmin;
+import com.ledikom.utils.AdminMessageToken;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.Update;
 
@@ -22,6 +23,9 @@ public class AdminService {
     }
 
     public List<String> getSplitStrings(final String messageFromAdmin) {
+        if (messageFromAdmin == null || messageFromAdmin.isBlank()) {
+            return List.of(AdminMessageToken.NEWS.label);
+        }
         List<String> splitStringsFromAdminMessage = new ArrayList<>(Arrays.stream(messageFromAdmin.split(DELIMITER)).map(String::trim).toList());
         splitStringsFromAdminMessage.set(0, splitStringsFromAdminMessage.get(0).toLowerCase());
         return splitStringsFromAdminMessage;
@@ -36,12 +40,10 @@ public class AdminService {
 
         var msg = update.getMessage();
         String photoPath;
-        if (msg.hasPhoto()) {
+        if (msg.hasPhoto() || msg.hasDocument()) {
             photoPath = botUtilityService.getPhotoFromUpdate(msg, getFileFromBotCallback);
             requestFromAdmin.setPhotoPath(photoPath);
-            if (photoPath != null) {
-                requestFromAdmin.setMessage(msg.getCaption());
-            }
+            requestFromAdmin.setMessage(msg.getCaption());
         } else if (msg.hasText()) {
             requestFromAdmin.setMessage(msg.getText());
         } else if (msg.hasPoll()) {

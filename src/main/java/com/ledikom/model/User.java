@@ -26,10 +26,11 @@ public class User {
     private UserResponseState responseState;
     private String note;
 
-    public User(final Long chatId, final Integer referralCount, final Boolean receiveNews) {
+    public User(final Long chatId, final Integer referralCount, final Boolean receiveNews, final UserResponseState responseState) {
         this.chatId = chatId;
         this.referralCount = referralCount;
         this.receiveNews = receiveNews;
+        this.responseState = responseState;
     }
 
     @ManyToMany(fetch = FetchType.EAGER)

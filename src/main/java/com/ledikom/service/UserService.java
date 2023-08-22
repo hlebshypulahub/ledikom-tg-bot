@@ -21,6 +21,7 @@ import java.util.stream.IntStream;
 public class UserService {
     private static final int INIT_REFERRAL_COUNT = 0;
     private static final boolean INIT_RECEIVE_NEWS = true;
+    private static final UserResponseState INIT_RESPONSE_STATE = UserResponseState.NONE;
 
     private final UserRepository userRepository;
     private final CouponService couponService;
@@ -43,7 +44,7 @@ public class UserService {
     }
 
     public void addNewUser(final Long chatId) {
-        User user = new User(chatId, INIT_REFERRAL_COUNT, INIT_RECEIVE_NEWS);
+        User user = new User(chatId, INIT_REFERRAL_COUNT, INIT_RECEIVE_NEWS, INIT_RESPONSE_STATE);
         userRepository.save(user);
         couponService.addCouponsToUser(user);
     }
@@ -127,12 +128,16 @@ public class UserService {
         saveUser(user);
 
         if (user.getNote() != null && !user.getNote().isBlank()) {
-            SendMessage smInfo = botUtilityService.buildSendMessage(BotResponses.editNote(), chatId);
             SendMessage smNote = botUtilityService.buildSendMessage(user.getNote(), chatId);
+            SendMessage smInfo = botUtilityService.buildSendMessage(BotResponses.editNote(), chatId);
             return List.of(smInfo, smNote);
         }
 
         SendMessage sm = botUtilityService.buildSendMessage(BotResponses.addNote(), chatId);
         return List.of(sm);
+    }
+
+    public boolean userIsInActiveState(final Long chatId) {
+        return findByChatId(chatId).getResponseState() != UserResponseState.NONE;
     }
 }

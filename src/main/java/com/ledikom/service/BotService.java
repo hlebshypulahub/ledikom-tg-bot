@@ -208,4 +208,8 @@ public class BotService {
         pollService.savePoll(entityPoll);
         sendPollToUsers(poll);
     }
+
+    public boolean userIsInActiveState(final Long chatId) {
+        return userService.userIsInActiveState(chatId);
+    }
 }

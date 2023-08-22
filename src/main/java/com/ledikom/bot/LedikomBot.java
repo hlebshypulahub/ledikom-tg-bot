@@ -102,11 +102,12 @@ public class LedikomBot extends TelegramLongPollingBot {
         if (update.hasMessage()) {
             var msg = update.getMessage();
             var chatId = msg.getChatId();
-            if (Objects.equals(chatId, adminId)) {
-                botService.processAdminRequest(update);
-            }
+            boolean userIsInActiveState = false;
             if (msg.hasText()) {
-                processMessage(msg.getText(), chatId);
+                userIsInActiveState = processMessage(msg.getText(), chatId);
+            }
+            if (Objects.equals(chatId, adminId) && !userIsInActiveState) {
+                botService.processAdminRequest(update);
             }
         } else if (update.hasCallbackQuery()) {
             var qry = update.getCallbackQuery();
@@ -121,7 +122,7 @@ public class LedikomBot extends TelegramLongPollingBot {
 //    zametki - Мои заметки
 //    moya_ssylka - Моя реферальная ссылка
 //    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
-    private void processMessage(String command, Long chatId) {
+    private boolean processMessage(String command, Long chatId) {
         boolean processed = false;
 
         Optional<ChatIdCallback> chatIdCallback = chatIdActions.entrySet().stream()
@@ -145,9 +146,13 @@ public class LedikomBot extends TelegramLongPollingBot {
             }
         }
 
-        if (!processed) {
+        boolean userIsInActiveState = botService.userIsInActiveState(chatId);
+
+        if (!processed && userIsInActiveState) {
             botService.processStatefulUserResponse(command, chatId);
         }
+
+        return userIsInActiveState;
     }
 
     private File getFileFromBot(final GetFile getFileRequest) throws TelegramApiException {

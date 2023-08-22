@@ -27,7 +27,7 @@ public class CouponService {
     private int helloCouponDiscount;
     @Value("${hello-coupon.name}")
     private String helloCouponName;
-    @Value("${coupon.duration-in-minutes}")
+    @Value("${coupon.duration-minutes}")
     private int couponDurationInMinutes;
 
     private final CouponRepository couponRepository;

@@ -10,10 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
-import org.telegram.telegrambots.meta.api.methods.BotApiMethod;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethodMessage;
-import org.telegram.telegrambots.meta.api.methods.polls.SendPoll;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
@@ -21,8 +19,6 @@ import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.polls.Poll;
-import org.telegram.telegrambots.meta.api.objects.polls.PollOption;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.IOException;
@@ -30,7 +26,6 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.*;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 
 @Component
@@ -67,6 +62,8 @@ public class LedikomBot extends TelegramLongPollingBot {
                 this.botService::sendReferralLinkForUser);
         chatIdActions.put(cmd -> cmd.equals("/vkl_otkl_rassylku"),
                 this.botService::sendTriggerReceiveNewsMessage);
+        chatIdActions.put(cmd -> cmd.equals("/zametki"),
+                this.botService::sendNoteAndSetUserResponseState);
     }
 
     public SendMessageWithPhotoCallback getSendMessageWithPhotoCallback() {
@@ -120,10 +117,13 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-    //    kupony - Мои активные купоны
-    //    moya_ssylka - Моя реферальная ссылка
-    //    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
+//    kupony - Мои активные купоны
+//    zametki - Мои заметки
+//    moya_ssylka - Моя реферальная ссылка
+//    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
     private void processMessage(String command, Long chatId) {
+        boolean processed = false;
+
         Optional<ChatIdCallback> chatIdCallback = chatIdActions.entrySet().stream()
                 .filter(entry -> entry.getKey().test(command))
                 .map(Map.Entry::getValue)
@@ -131,12 +131,22 @@ public class LedikomBot extends TelegramLongPollingBot {
         boolean isChatIdAction = chatIdCallback.isPresent();
         if (isChatIdAction) {
             chatIdCallback.get().execute(chatId);
+            processed = true;
         } else {
-            commandWithChatIdActions.entrySet().stream()
+            Optional<CommandWithChatIdCallback> commandWithChatIdCallback = commandWithChatIdActions.entrySet().stream()
                     .filter(entry -> entry.getKey().test(command))
                     .map(Map.Entry::getValue)
-                    .findFirst()
-                    .ifPresent(action -> action.execute(command, chatId));
+                    .findFirst();
+            boolean isCommandWithChatIdAction = commandWithChatIdCallback.isPresent();
+
+            if (isCommandWithChatIdAction) {
+                commandWithChatIdCallback.get().execute(command, chatId);
+                processed = true;
+            }
+        }
+
+        if (!processed) {
+            botService.processStatefulUserResponse(command, chatId);
         }
     }
 

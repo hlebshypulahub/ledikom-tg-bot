@@ -24,7 +24,7 @@ public class BotService {
     private String botUsername;
     @Value("${hello-coupon.name}")
     private String helloCouponName;
-    @Value("${coupon.duration-in-minutes}")
+    @Value("${coupon.duration-minutes}")
     private int couponDurationInMinutes;
     @Value("${admin.id}")
     private Long adminId;
@@ -66,7 +66,7 @@ public class BotService {
         CouponService.userCoupons.entrySet().removeIf(userCoupon -> userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 5000);
     }
 
-    @Scheduled(fixedRate = 10000)
+    @Scheduled(fixedRate = 1000 * 60 * 60)
     public void sendPollInfoToAdmin() {
         SendMessage sm = botUtilityService.buildSendMessage(pollService.getPollsInfoForAdmin(), adminId);
         sendMessageCallback.execute(sm);
@@ -100,6 +100,11 @@ public class BotService {
             userService.addNewRefUser(Long.parseLong(refCode), chatId);
         }
         addUserAndSendHelloMessage(chatId);
+    }
+
+    public void processStatefulUserResponse(final String text, final Long chatId) {
+        String feedbackMessage = userService.processStatefulUserResponse(text, chatId);
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(feedbackMessage, chatId));
     }
 
     private void addUserAndSendHelloMessage(final long chatId) {
@@ -166,6 +171,11 @@ public class BotService {
         user.setReceiveNews(!user.getReceiveNews());
         userService.saveUser(user);
         sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.triggerReceiveNewsMessage(user), chatId));
+    }
+
+    public void sendNoteAndSetUserResponseState(final long chatId) {
+        List<SendMessage> sendMessageList = userService.processNoteRequestAndBuildSendMessageList(chatId);
+        sendMessageList.forEach(sm -> sendMessageCallback.execute(sm));
     }
 
     private void sendNewsToUsers(final String photoPath, final List<String> splitStringsFromAdminMessage) {

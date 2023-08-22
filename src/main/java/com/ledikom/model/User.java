@@ -1,5 +1,6 @@
 package com.ledikom.model;
 
+import com.ledikom.utils.UserResponseState;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,7 +14,7 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "user-ledikom")
+@Table(name = "user_ledikom")
 public class User {
 
     @Id
@@ -22,6 +23,8 @@ public class User {
     private Long chatId;
     private Integer referralCount;
     private Boolean receiveNews;
+    private UserResponseState responseState;
+    private String note;
 
     public User(final Long chatId, final Integer referralCount, final Boolean receiveNews) {
         this.chatId = chatId;

@@ -4,9 +4,12 @@ import com.ledikom.model.Coupon;
 import com.ledikom.model.PollOption;
 import com.ledikom.model.User;
 import com.ledikom.repository.UserRepository;
+import com.ledikom.utils.BotResponses;
+import com.ledikom.utils.UserResponseState;
 import jakarta.persistence.*;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
 import java.time.LocalDateTime;
@@ -22,11 +25,13 @@ public class UserService {
     private final UserRepository userRepository;
     private final CouponService couponService;
     private final PollService pollService;
+    private final BotUtilityService botUtilityService;
 
-    public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService) {
+    public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService, final BotUtilityService botUtilityService) {
         this.userRepository = userRepository;
         this.couponService = couponService;
         this.pollService = pollService;
+        this.botUtilityService = botUtilityService;
     }
 
     public List<User> getAllUsers() {
@@ -70,9 +75,9 @@ public class UserService {
             com.ledikom.model.Poll pollToUpdate = pollService.findByQuestion(telegramPoll.getQuestion());
 
             List<PollOption> pollOptionList = IntStream.range(0, telegramPoll.getOptions().size())
-                            .mapToObj(index -> new PollOption(
-                                    pollToUpdate.getOptions().get(index).getText(),
-                                    pollToUpdate.getOptions().get(index).getVoterCount() + telegramPoll.getOptions().get(index).getVoterCount()))
+                    .mapToObj(index -> new PollOption(
+                            pollToUpdate.getOptions().get(index).getText(),
+                            pollToUpdate.getOptions().get(index).getVoterCount() + telegramPoll.getOptions().get(index).getVoterCount()))
                     .toList();
             pollToUpdate.setOptions(pollOptionList);
             pollToUpdate.setTotalVoterCount(pollToUpdate.getTotalVoterCount() + 1);
@@ -80,6 +85,18 @@ public class UserService {
 
             pollService.savePoll(pollToUpdate);
         }
+    }
+
+    public String processStatefulUserResponse(final String text, final Long chatId) {
+        User user = findByChatId(chatId);
+        if (user.getResponseState() == UserResponseState.SENDING_NOTE) {
+            user.setNote(text);
+            user.setResponseState(UserResponseState.NONE);
+            saveUser(user);
+            return BotResponses.noteAdded();
+        }
+
+        return "Нет такой команды!";
     }
 
     public void removeCouponFromUser(final User user, final Coupon coupon) {
@@ -102,5 +119,20 @@ public class UserService {
 
     public List<User> getAllUsersToReceiveNews() {
         return userRepository.findAll().stream().filter(User::getReceiveNews).collect(Collectors.toList());
+    }
+
+    public List<SendMessage> processNoteRequestAndBuildSendMessageList(final long chatId) {
+        User user = findByChatId(chatId);
+        user.setResponseState(UserResponseState.SENDING_NOTE);
+        saveUser(user);
+
+        if (user.getNote() != null && !user.getNote().isBlank()) {
+            SendMessage smInfo = botUtilityService.buildSendMessage(BotResponses.editNote(), chatId);
+            SendMessage smNote = botUtilityService.buildSendMessage(user.getNote(), chatId);
+            return List.of(smInfo, smNote);
+        }
+
+        SendMessage sm = botUtilityService.buildSendMessage(BotResponses.addNote(), chatId);
+        return List.of(sm);
     }
 }

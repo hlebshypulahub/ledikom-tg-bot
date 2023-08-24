@@ -80,7 +80,7 @@ public class BotService {
         });
     }
 
-    @Scheduled(fixedRate = 1000 * 5)
+    @Scheduled(fixedRate = 1000 * 60)
     public void processMusicMessagesInMap() {
         LocalDateTime checkpointTimestamp = LocalDateTime.now().plusSeconds(DELETION_EPSILON_SECONDS);
         musicMessagesMap.entrySet().removeIf(entry -> {

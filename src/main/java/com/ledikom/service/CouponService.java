@@ -2,7 +2,7 @@ package com.ledikom.service;
 
 import com.ledikom.model.Coupon;
 import com.ledikom.model.User;
-import com.ledikom.model.UserCouponKey;
+import com.ledikom.model.MessageIdInChat;
 import com.ledikom.model.UserCouponRecord;
 import com.ledikom.repository.CouponRepository;
 import com.ledikom.utils.BotResponses;
@@ -21,7 +21,7 @@ import java.util.*;
 @Service
 public class CouponService {
 
-    public static final Map<UserCouponKey, UserCouponRecord> userCoupons = new HashMap<>();
+    public static final Map<MessageIdInChat, UserCouponRecord> userCoupons = new HashMap<>();
 
     @Value("${hello-coupon.discount}")
     private int helloCouponDiscount;
@@ -76,9 +76,9 @@ public class CouponService {
         sm.setReplyMarkup(markup);
     }
 
-    public void addCouponToMap(final UserCouponKey userCouponKey, final String couponText) {
+    public void addCouponToMap(final MessageIdInChat messageIdInChat, final String couponText) {
         long expiryTimestamp = System.currentTimeMillis() + couponDurationInMinutes * 60 * 1000L;
-        userCoupons.put(userCouponKey, new UserCouponRecord(expiryTimestamp, couponText));
+        userCoupons.put(messageIdInChat, new UserCouponRecord(expiryTimestamp, couponText));
     }
 
     public String generateSignedCouponText(final Coupon coupon) {

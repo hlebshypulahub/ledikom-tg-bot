@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class UserCouponKey {
+public class MessageIdInChat {
     private long chatId;
     private int messageId;
 }

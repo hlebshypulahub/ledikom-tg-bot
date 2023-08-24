@@ -1,7 +1,7 @@
 package com.ledikom.bot;
 
 import com.ledikom.callback.*;
-import com.ledikom.model.UserCouponKey;
+import com.ledikom.model.MessageIdInChat;
 import com.ledikom.service.BotService;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -12,8 +12,10 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethodMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -56,6 +58,8 @@ public class LedikomBot extends TelegramLongPollingBot {
                 this.botService::sendCouponIfNotUsed);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("/start"),
                 this.botService::processRefLinkOnFollow);
+        commandWithChatIdActions.put(cmd -> cmd.startsWith("music_"),
+                this.botService::processMusicRequest);
         chatIdActions.put(cmd -> cmd.equals("/kupony"),
                 this.botService::sendAllCouponsList);
         chatIdActions.put(cmd -> cmd.equals("/moya_ssylka"),
@@ -64,6 +68,8 @@ public class LedikomBot extends TelegramLongPollingBot {
                 this.botService::sendTriggerReceiveNewsMessage);
         chatIdActions.put(cmd -> cmd.equals("/zametki"),
                 this.botService::sendNoteAndSetUserResponseState);
+        chatIdActions.put(cmd -> cmd.equals("/muzyka_dla_sna"),
+                this.botService::sendMusicMenu);
     }
 
     public SendMessageWithPhotoCallback getSendMessageWithPhotoCallback() {
@@ -84,6 +90,14 @@ public class LedikomBot extends TelegramLongPollingBot {
 
     public EditMessageCallback getEditMessageCallback() {
         return this::editMessage;
+    }
+
+    public SendMusicFileCallback getSendMusicFileCallback() {
+        return this::sendMusicFile;
+    }
+
+    public DeleteMessageCallback getDeleteMessageCallback() {
+        return this::deleteMessage;
     }
 
     @Override
@@ -120,6 +134,7 @@ public class LedikomBot extends TelegramLongPollingBot {
 
 //    kupony - Мои активные купоны
 //    zametki - Мои заметки
+//    muzyka_dla_sna - Музыка для сна
 //    moya_ssylka - Моя реферальная ссылка
 //    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
     private boolean processMessage(String command, Long chatId) {
@@ -183,13 +198,31 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-    private UserCouponKey sendCoupon(SendMessage sm) {
+    private MessageIdInChat sendCoupon(SendMessage sm) {
         try {
             Message sentMessage = execute(sm);
-            return new UserCouponKey(sentMessage.getChatId(), sentMessage.getMessageId());
+            return new MessageIdInChat(sentMessage.getChatId(), sentMessage.getMessageId());
         } catch (Exception e) {
             log.trace(e.getMessage());
             return null;
+        }
+    }
+
+    private MessageIdInChat sendMusicFile(final SendAudio sendAudio) {
+        try {
+            Message sentMessage = execute(sendAudio);
+            return new MessageIdInChat(sentMessage.getChatId(), sentMessage.getMessageId());
+        } catch (Exception e) {
+            log.trace(e.getMessage());
+            return null;
+        }
+    }
+
+    private void deleteMessage(DeleteMessage deleteMessage) {
+        try {
+            execute(deleteMessage);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
         }
     }
 

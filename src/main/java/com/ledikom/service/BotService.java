@@ -5,20 +5,33 @@ import com.ledikom.callback.*;
 import com.ledikom.model.*;
 import com.ledikom.utils.AdminMessageToken;
 import com.ledikom.utils.BotResponses;
+import com.ledikom.utils.UtilityHelper;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.*;
 
 @Component
 public class BotService {
+
+    private static final Map<MessageIdInChat, LocalDateTime> messaegsToDeleteMap = new HashMap<>();
+    private static final int DELETION_EPSILON_SECONDS = 5;
 
     @Value("${bot.username}")
     private String botUsername;
@@ -41,6 +54,8 @@ public class BotService {
     private SendCouponCallback sendCouponCallback;
     private SendMessageCallback sendMessageCallback;
     private EditMessageCallback editMessageCallback;
+    private SendMusicFileCallback sendMusicFileCallback;
+    private DeleteMessageCallback deleteMessageCallback;
 
     public BotService(final UserService userService, final CouponService couponService, final BotUtilityService botUtilityService, final AdminService adminService, final PollService pollService, @Lazy final LedikomBot ledikomBot) {
         this.userService = userService;
@@ -58,12 +73,32 @@ public class BotService {
         this.sendCouponCallback = ledikomBot.getSendCouponCallback();
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
         this.editMessageCallback = ledikomBot.getEditMessageCallback();
+        this.sendMusicFileCallback = ledikomBot.getSendMusicFileCallback();
+        this.deleteMessageCallback = ledikomBot.getDeleteMessageCallback();
     }
 
     @Scheduled(fixedRate = 1000)
     public void processCouponsInMap() {
-        CouponService.userCoupons.forEach(this::updateCouponTimerAndMessage);
-        CouponService.userCoupons.entrySet().removeIf(userCoupon -> userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 5000);
+        CouponService.userCoupons.entrySet().removeIf(userCoupon -> {
+            updateCouponTimerAndMessage(userCoupon.getKey(), userCoupon.getValue());
+            return userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 1000 * DELETION_EPSILON_SECONDS;
+        });
+    }
+
+    @Scheduled(fixedRate = 1000 * 60)
+    public void processMessagesToDeleteInMap() {
+        LocalDateTime checkpointTimestamp = LocalDateTime.now().plusSeconds(DELETION_EPSILON_SECONDS);
+        messaegsToDeleteMap.entrySet().removeIf(entry -> {
+            if (entry.getValue().isBefore(checkpointTimestamp)) {
+                DeleteMessage deleteMessage = DeleteMessage.builder()
+                        .chatId(entry.getKey().getChatId())
+                        .messageId(entry.getKey().getMessageId())
+                        .build();
+                deleteMessageCallback.execute(deleteMessage);
+                return true;
+            }
+            return false;
+        });
     }
 
     @Scheduled(fixedRate = 1000 * 60 * 60)
@@ -72,16 +107,16 @@ public class BotService {
         sendMessageCallback.execute(sm);
     }
 
-    private void updateCouponTimerAndMessage(final UserCouponKey userCouponKey, final UserCouponRecord userCouponRecord) {
+    private void updateCouponTimerAndMessage(final MessageIdInChat messageIdInChat, final UserCouponRecord userCouponRecord) {
         long timeLeftInSeconds = (userCouponRecord.getExpiryTimestamp() - System.currentTimeMillis()) / 1000;
         if (timeLeftInSeconds >= 0) {
-            editMessageCallback.execute(userCouponKey.getChatId(), userCouponKey.getMessageId(), BotResponses.updatedCouponText(userCouponRecord, timeLeftInSeconds));
+            editMessageCallback.execute(messageIdInChat.getChatId(), messageIdInChat.getMessageId(), BotResponses.updatedCouponText(userCouponRecord, timeLeftInSeconds));
         } else {
-            editMessageCallback.execute(userCouponKey.getChatId(), userCouponKey.getMessageId(), BotResponses.couponExpiredMessage());
+            editMessageCallback.execute(messageIdInChat.getChatId(), messageIdInChat.getMessageId(), BotResponses.couponExpiredMessage());
         }
     }
 
-    public void processAdminRequest(final Update update) {
+    public void processAdminRequest(final Update update) throws IOException {
         RequestFromAdmin requestFromAdmin = adminService.getRequestFromAdmin(update, getFileFromBotCallback);
         if (requestFromAdmin.isPoll()) {
             executeAdminActionOnPollReceived(requestFromAdmin.getPoll());
@@ -102,6 +137,30 @@ public class BotService {
         addUserAndSendHelloMessage(chatId);
     }
 
+    public void processMusicRequest(final String command, final Long chatId) throws IOException {
+        MusicCallbackRequest musicCallbackRequest = UtilityHelper.getMusicCallbackRequest(command);
+
+        if (musicCallbackRequest.readyToPlay()) {
+            String audioFileName = command + ".mp3";
+            InputStream audioInputStream = getClass().getResourceAsStream("/" + audioFileName);
+            InputFile audioInputFile = new InputFile(audioInputStream, audioFileName);
+            SendAudio sendAudio = new SendAudio(String.valueOf(chatId), audioInputFile);
+            LocalDateTime toDeleteTimestamp = LocalDateTime.now().plusMinutes(musicCallbackRequest.getDuration());
+            MessageIdInChat messageIdInChatMusic = sendMusicFileCallback.execute(sendAudio);
+            messaegsToDeleteMap.put(messageIdInChatMusic, toDeleteTimestamp);
+        } else {
+            String imageName = musicCallbackRequest.getStyleString() + ".jpg";
+            InputStream audioInputStream = getClass().getResourceAsStream("/" + imageName);
+            InputFile audioInputFile = new InputFile(audioInputStream, imageName);
+            InputFile inputFile = new InputFile(audioInputStream, imageName);
+            sendMessageWithPhotoCallback.execute(inputFile, BotResponses.goodNight(), chatId);
+
+            var sm = SendMessage.builder().chatId(chatId).text(BotResponses.musicDurationMenu()).build();
+            botUtilityService.addMusicDurationButtonsToSendMessage(sm, command);
+            sendMessageCallback.execute(sm);
+        }
+    }
+
     public void processStatefulUserResponse(final String text, final Long chatId) {
         String feedbackMessage = userService.processStatefulUserResponse(text, chatId);
         sendMessageCallback.execute(botUtilityService.buildSendMessage(feedbackMessage, chatId));
@@ -115,6 +174,12 @@ public class BotService {
             couponService.addCouponButton(sm, coupon, "Активировать приветственный купон", "couponPreview_");
             sendMessageCallback.execute(sm);
         }
+    }
+
+    public void sendMusicMenu(final long chatId) {
+        var sm = botUtilityService.buildSendMessage(BotResponses.musicMenu(), chatId);
+        botUtilityService.addMusicMenuButtonsToSendMessage(sm);
+        sendMessageCallback.execute(sm);
     }
 
     public void sendCouponAcceptMessageIfNotUsed(final String couponCommand, final long chatId) {
@@ -141,8 +206,8 @@ public class BotService {
         } else {
             String couponTextWithUniqueSign = couponService.generateSignedCouponText(coupon);
             var sm = botUtilityService.buildSendMessage(BotResponses.initialCouponText(couponTextWithUniqueSign, couponDurationInMinutes), chatId);
-            UserCouponKey userCouponKey = sendCouponCallback.execute(sm);
-            couponService.addCouponToMap(userCouponKey, couponTextWithUniqueSign);
+            MessageIdInChat messageIdInChat = sendCouponCallback.execute(sm);
+            couponService.addCouponToMap(messageIdInChat, couponTextWithUniqueSign);
             userService.removeCouponFromUser(user, coupon);
         }
     }
@@ -178,14 +243,16 @@ public class BotService {
         sendMessageList.forEach(sm -> sendMessageCallback.execute(sm));
     }
 
-    private void sendNewsToUsers(final String photoPath, final List<String> splitStringsFromAdminMessage) {
+    private void sendNewsToUsers(final String photoPath, final List<String> splitStringsFromAdminMessage) throws IOException {
         NewsFromAdmin newsFromAdmin = adminService.getNewsByAdmin(splitStringsFromAdminMessage, photoPath);
         List<User> usersToSendNews = userService.getAllUsersToReceiveNews();
 
         if (newsFromAdmin.getPhotoPath() == null || newsFromAdmin.getPhotoPath().isBlank()) {
             usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendMessage(newsFromAdmin.getNews(), user.getChatId())));
         } else {
-            usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(photoPath, newsFromAdmin.getNews(), user.getChatId()));
+            InputStream imageStream = new URL(photoPath).openStream();
+            InputFile inputFile = new InputFile(imageStream, "image.jpg");
+            usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, newsFromAdmin.getNews(), user.getChatId()));
         }
     }
 
@@ -194,7 +261,7 @@ public class BotService {
         usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendPoll(poll, user.getChatId())));
     }
 
-    private void executeAdminActionOnMessageReceived(final RequestFromAdmin requestFromAdmin) {
+    private void executeAdminActionOnMessageReceived(final RequestFromAdmin requestFromAdmin) throws IOException {
         List<String> splitStringsFromAdminMessage = adminService.getSplitStrings(requestFromAdmin.getMessage());
 
         if (splitStringsFromAdminMessage.get(0).equals(AdminMessageToken.NEWS.label)) {

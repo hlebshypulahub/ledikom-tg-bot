@@ -84,4 +84,16 @@ public final class BotResponses {
     public static String addNote() {
         return "Введите нотатку и вышлите сообщение";
     }
+
+    public static String musicMenu() {
+        return "Это меню музыки для сна. Выберите стиль:";
+    }
+
+    public static String musicDurationMenu() {
+        return "Выберите продолжительность, музыка остановится автоматически";
+    }
+
+    public static String goodNight() {
+        return "Good night!";
+    }
 }

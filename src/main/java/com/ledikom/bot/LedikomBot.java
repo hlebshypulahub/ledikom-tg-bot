@@ -3,6 +3,8 @@ package com.ledikom.bot;
 import com.ledikom.callback.*;
 import com.ledikom.model.MessageIdInChat;
 import com.ledikom.service.BotService;
+import com.ledikom.service.UserService;
+import com.ledikom.utils.City;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +28,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 
 @Component
@@ -39,13 +42,15 @@ public class LedikomBot extends TelegramLongPollingBot {
     private Long adminId;
 
     private final BotService botService;
+    private final UserService userService;
 
     private static final Logger log = LoggerFactory.getLogger(LedikomBot.class);
     private static final Map<Predicate<String>, ChatIdCallback> chatIdActions = new HashMap<>();
     private static final Map<Predicate<String>, CommandWithChatIdCallback> commandWithChatIdActions = new HashMap<>();
 
-    public LedikomBot(@Lazy final BotService botService) {
+    public LedikomBot(@Lazy final BotService botService, @Lazy final UserService userService) {
         this.botService = botService;
+        this.userService = userService;
     }
 
     @PostConstruct
@@ -55,9 +60,11 @@ public class LedikomBot extends TelegramLongPollingBot {
         commandWithChatIdActions.put(cmd -> cmd.startsWith("couponAccept_"),
                 this.botService::sendCouponIfNotUsed);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("/start"),
-                this.botService::processRefLinkOnFollow);
+                this.botService::processStartRefLinkOnFollow);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("music_"),
                 this.botService::processMusicRequest);
+        commandWithChatIdActions.put(cmd -> Arrays.stream(City.values()).map(Enum::name).toList().contains(cmd),
+                this.userService::addCityToUser);
         chatIdActions.put(cmd -> cmd.equals("/kupony"),
                 this.botService::sendAllCouponsList);
         chatIdActions.put(cmd -> cmd.equals("/moya_ssylka"),
@@ -68,44 +75,6 @@ public class LedikomBot extends TelegramLongPollingBot {
                 this.botService::sendNoteAndSetUserResponseState);
         chatIdActions.put(cmd -> cmd.equals("/muzyka_dla_sna"),
                 this.botService::sendMusicMenu);
-    }
-
-    public SendMessageWithPhotoCallback getSendMessageWithPhotoCallback() {
-        return this::sendImageWithCaption;
-    }
-
-    public GetFileFromBotCallback getGetFileFromBotCallback() {
-        return this::getFileFromBot;
-    }
-
-    public SendCouponCallback getSendCouponCallback() {
-        return this::sendCoupon;
-    }
-
-    public SendMessageCallback getSendMessageCallback() {
-        return this::sendMessage;
-    }
-
-    public EditMessageCallback getEditMessageCallback() {
-        return this::editMessage;
-    }
-
-    public SendMusicFileCallback getSendMusicFileCallback() {
-        return this::sendMusicFile;
-    }
-
-    public DeleteMessageCallback getDeleteMessageCallback() {
-        return this::deleteMessage;
-    }
-
-    @Override
-    public String getBotUsername() {
-        return botUsername;
-    }
-
-    @Override
-    public String getBotToken() {
-        return botToken;
     }
 
     @Override
@@ -171,13 +140,51 @@ public class LedikomBot extends TelegramLongPollingBot {
             }
         }
 
-        boolean userIsInActiveState = botService.userIsInActiveState(chatId);
+        boolean userIsInActiveState = userService.userIsInActiveState(chatId);
 
         if (!processed && userIsInActiveState) {
             botService.processStatefulUserResponse(command, chatId);
         }
 
         return userIsInActiveState;
+    }
+
+    public SendMessageWithPhotoCallback getSendMessageWithPhotoCallback() {
+        return this::sendImageWithCaption;
+    }
+
+    public GetFileFromBotCallback getGetFileFromBotCallback() {
+        return this::getFileFromBot;
+    }
+
+    public SendCouponCallback getSendCouponCallback() {
+        return this::sendCoupon;
+    }
+
+    public SendMessageCallback getSendMessageCallback() {
+        return this::sendMessage;
+    }
+
+    public EditMessageCallback getEditMessageCallback() {
+        return this::editMessage;
+    }
+
+    public SendMusicFileCallback getSendMusicFileCallback() {
+        return this::sendMusicFile;
+    }
+
+    public DeleteMessageCallback getDeleteMessageCallback() {
+        return this::deleteMessage;
+    }
+
+    @Override
+    public String getBotUsername() {
+        return botUsername;
+    }
+
+    @Override
+    public String getBotToken() {
+        return botToken;
     }
 
     private File getFileFromBot(final GetFile getFileRequest) throws TelegramApiException {

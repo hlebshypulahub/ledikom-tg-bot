@@ -96,4 +96,12 @@ public final class BotResponses {
     public static String goodNight() {
         return "Good night!";
     }
+
+    public static String chooseYourCity() {
+        return "Выбери город";
+    }
+
+    public static String cityAdded(final String cityName) {
+        return "Вы выбрали: " + City.valueOf(cityName).label;
+    }
 }

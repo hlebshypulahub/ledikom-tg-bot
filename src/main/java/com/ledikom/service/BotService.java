@@ -149,18 +149,12 @@ public class BotService {
             MessageIdInChat messageIdInChatMusic = sendMusicFileCallback.execute(sendAudio);
             messaegsToDeleteMap.put(messageIdInChatMusic, toDeleteTimestamp);
         } else {
-//            ClassLoader classLoader = getClass().getClassLoader();
-//            URL imageUrl = classLoader.getResource(musicCallbackRequest.getStyleString() + ".jpg");
-//            assert imageUrl != null;
-//            Resource resource = new UrlResource(imageUrl);
-//            File imageFile = resource.getFile();
             String imageName = musicCallbackRequest.getStyleString() + ".jpg";
             InputStream audioInputStream = getClass().getResourceAsStream("/" + imageName);
             InputFile audioInputFile = new InputFile(audioInputStream, imageName);
             InputFile inputFile = new InputFile(audioInputStream, imageName);
             sendMessageWithPhotoCallback.execute(inputFile, BotResponses.goodNight(), chatId);
 
-//            var sm = botUtilityService.buildSendMessage(BotResponses.musicDurationMenu(), chatId);
             var sm = SendMessage.builder().chatId(chatId).text(BotResponses.musicDurationMenu()).build();
             botUtilityService.addMusicDurationButtonsToSendMessage(sm, command);
             sendMessageCallback.execute(sm);

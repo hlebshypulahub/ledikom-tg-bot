@@ -1,6 +1,5 @@
 package com.ledikom.model;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -9,6 +8,7 @@ import lombok.Setter;
 public class MusicCallbackRequest {
     private String command;
     private int duration;
+    private String styleString;
 
     public MusicCallbackRequest(final String command) {
         this.command = command;

@@ -72,12 +72,19 @@ public class BotUtilityService {
     public void addMusicMenuButtonsToSendMessage(final SendMessage sm) {
         var markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
-        var button = new InlineKeyboardButton();
-        button.setText(MusicMenuButton.RAIN.buttonText);
-        button.setCallbackData(MusicMenuButton.RAIN.callbackDataString);
+
         List<InlineKeyboardButton> row = new ArrayList<>();
-        row.add(button);
-        keyboard.add(row);
+        for (int index = 0; index < MusicMenuButton.values().length; ) {
+            var button = new InlineKeyboardButton();
+            button.setText(MusicMenuButton.values()[index].buttonText);
+            button.setCallbackData(MusicMenuButton.values()[index].callbackDataString);
+            row.add(button);
+            if (++index % 2 == 0) {
+                keyboard.add(row);
+                row = new ArrayList<>();
+            }
+        }
+
         markup.setKeyboard(keyboard);
         sm.setReplyMarkup(markup);
     }

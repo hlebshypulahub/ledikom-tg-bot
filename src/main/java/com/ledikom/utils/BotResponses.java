@@ -92,4 +92,8 @@ public final class BotResponses {
     public static String musicDurationMenu() {
         return "Выберите продолжительность, музыка остановится автоматически";
     }
+
+    public static String goodNight() {
+        return "Good night!";
+    }
 }

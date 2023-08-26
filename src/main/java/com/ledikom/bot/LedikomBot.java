@@ -24,8 +24,6 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
 import java.util.*;
 import java.util.function.Predicate;
 
@@ -118,15 +116,27 @@ public class LedikomBot extends TelegramLongPollingBot {
             var chatId = msg.getChatId();
             boolean userIsInActiveState = false;
             if (msg.hasText()) {
-                userIsInActiveState = processMessage(msg.getText(), chatId);
+                try {
+                    userIsInActiveState = processMessage(msg.getText(), chatId);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
             if (Objects.equals(chatId, adminId) && !userIsInActiveState) {
-                botService.processAdminRequest(update);
+                try {
+                    botService.processAdminRequest(update);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
             }
         } else if (update.hasCallbackQuery()) {
             var qry = update.getCallbackQuery();
             var chatId = qry.getMessage().getChatId();
-            processMessage(qry.getData(), chatId);
+            try {
+                processMessage(qry.getData(), chatId);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
         } else if (update.hasPoll()) {
             botService.processPoll(update.getPoll());
         }
@@ -137,7 +147,7 @@ public class LedikomBot extends TelegramLongPollingBot {
 //    muzyka_dla_sna - Музыка для сна
 //    moya_ssylka - Моя реферальная ссылка
 //    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
-    private boolean processMessage(String command, Long chatId) {
+    private boolean processMessage(String command, Long chatId) throws IOException {
         boolean processed = false;
 
         Optional<ChatIdCallback> chatIdCallback = chatIdActions.entrySet().stream()
@@ -174,17 +184,17 @@ public class LedikomBot extends TelegramLongPollingBot {
         return execute(getFileRequest);
     }
 
-    private void sendImageWithCaption(String imageUrl, String caption, Long chatId) {
+    private MessageIdInChat sendImageWithCaption(final InputFile inputFile, final String caption, final Long chatId) {
         try {
-            InputStream imageStream = new URL(imageUrl).openStream();
-            InputFile inputFile = new InputFile(imageStream, "image.jpg");
             SendPhoto sendPhoto = new SendPhoto();
             sendPhoto.setChatId(chatId.toString());
             sendPhoto.setPhoto(inputFile);
             sendPhoto.setCaption(caption);
-            execute(sendPhoto);
-        } catch (IOException | TelegramApiException e) {
+            Message sentMessage = execute(sendPhoto);
+            return new MessageIdInChat(sentMessage.getChatId(), sentMessage.getMessageId());
+        } catch (TelegramApiException e) {
             e.printStackTrace();
+            return null;
         }
     }
 

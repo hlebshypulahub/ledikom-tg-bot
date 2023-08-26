@@ -18,10 +18,18 @@ public class Coupon {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String text;
+
+    private int startMonth;
+    private int startDay;
+    private int endMonth;
+    private int endDay;
+
     private String name;
-    private int discount;
-    private LocalDateTime expiryDateTime;
+    private String text;
+    private String news;
+    private String discount;
+
+    private List<Pharma>
 
     public Coupon(final String text, final String name, final int discount) {
         this.text = text;

@@ -266,6 +266,8 @@ public class BotService {
 
         if (splitStringsFromAdminMessage.get(0).equals(AdminMessageToken.NEWS.label)) {
             sendNewsToUsers(requestFromAdmin.getPhotoPath(), splitStringsFromAdminMessage);
+        } else if (splitStringsFromAdminMessage.get(0).equals(AdminMessageToken.COUPON.label)) {
+            Coupon coupon = couponService.createAndSendNewCoupon(requestFromAdmin.getPhotoPath(), splitStringsFromAdminMessage);
         }
     }
 

@@ -108,4 +108,26 @@ public class CouponService {
 
         return markup;
     }
+
+    public Coupon createAndSendNewCoupon(final String photoPath, final List<String> splitStringsFromAdminMessage){
+        Coupon coupon = adminService.getNewCoupon(splitStringsFromAdminMessage);
+
+        Coupon coupon = couponService.createNewCoupon(newCoupon.getDiscount(), newCoupon.getName(), newCoupon.getCouponDescription(), newCoupon.getExpirationDate());
+
+        List<User> usersToSendNews = userService.getAllUsersToReceiveNews();
+
+        if (photoPath == null || photoPath.isBlank()) {
+            usersToSendNews.forEach(user -> {
+                var sm = botUtilityService.buildSendMessage(BotResponses.newCoupon(newCoupon), user.getChatId());
+                couponService.addCouponButton(sm, coupon, "Активировать купон", "couponPreview_");
+                sendMessageCallback.execute(sm);
+            });
+        } else {
+            usersToSendNews.forEach(user -> {
+                sendMessageWithPhotoCallback.execute(photoPath, "", user.getChatId());
+                var sm = botUtilityService.buildSendMessage(BotResponses.newCoupon(newCoupon), user.getChatId());
+                couponService.addCouponButton(sm, coupon, "Активировать купон", "couponPreview_");
+                sendMessageCallback.execute(sm);
+            });
+        }
 }

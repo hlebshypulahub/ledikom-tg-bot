@@ -1,11 +1,15 @@
 package com.ledikom.service;
 
+import com.ledikom.bot.LedikomBot;
+import com.ledikom.callback.SendMessageCallback;
 import com.ledikom.model.Coupon;
 import com.ledikom.model.PollOption;
 import com.ledikom.model.User;
 import com.ledikom.repository.UserRepository;
 import com.ledikom.utils.BotResponses;
+import com.ledikom.utils.City;
 import com.ledikom.utils.UserResponseState;
+import jakarta.annotation.PostConstruct;
 import jakarta.persistence.*;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -27,12 +31,21 @@ public class UserService {
     private final CouponService couponService;
     private final PollService pollService;
     private final BotUtilityService botUtilityService;
+    private final LedikomBot ledikomBot;
 
-    public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService, final BotUtilityService botUtilityService) {
+    private SendMessageCallback sendMessageCallback;
+
+    public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService, final BotUtilityService botUtilityService, @Lazy final LedikomBot ledikomBot) {
         this.userRepository = userRepository;
         this.couponService = couponService;
         this.pollService = pollService;
         this.botUtilityService = botUtilityService;
+        this.ledikomBot = ledikomBot;
+    }
+
+    @PostConstruct
+    public void initCallbacks() {
+        this.sendMessageCallback = ledikomBot.getSendMessageCallback();
     }
 
     public List<User> getAllUsers() {
@@ -139,5 +152,12 @@ public class UserService {
 
     public boolean userIsInActiveState(final Long chatId) {
         return findByChatId(chatId).getResponseState() != UserResponseState.NONE;
+    }
+
+    public void addCityToUser(final String cityName, final Long chatId) {
+        User user = findByChatId(chatId);
+        user.setCity(City.valueOf(cityName));
+        userRepository.save(user);
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAdded(cityName), chatId));
     }
 }

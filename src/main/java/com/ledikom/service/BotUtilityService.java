@@ -1,6 +1,7 @@
 package com.ledikom.service;
 
 import com.ledikom.callback.GetFileFromBotCallback;
+import com.ledikom.utils.City;
 import com.ledikom.utils.MusicMenuButton;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -16,9 +17,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Component
@@ -70,38 +69,34 @@ public class BotUtilityService {
     }
 
     public void addMusicMenuButtonsToSendMessage(final SendMessage sm) {
-        var markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
-
-        List<InlineKeyboardButton> row = new ArrayList<>();
-        for (int index = 0; index < MusicMenuButton.values().length; ) {
-            var button = new InlineKeyboardButton();
-            button.setText(MusicMenuButton.values()[index].buttonText);
-            button.setCallbackData(MusicMenuButton.values()[index].callbackDataString);
-            row.add(button);
-            if (++index % 2 == 0) {
-                keyboard.add(row);
-                row = new ArrayList<>();
-            }
-        }
-
-        markup.setKeyboard(keyboard);
-        sm.setReplyMarkup(markup);
+        addButtonsToMessage(sm, 2,
+                Arrays.stream(MusicMenuButton.values()).map(value -> value.buttonText).collect(Collectors.toList()),
+                        Arrays.stream(MusicMenuButton.values()).map(value -> value.callbackDataString).collect(Collectors.toList()));
     }
 
     public void addMusicDurationButtonsToSendMessage(final SendMessage sm, String musicString) {
-        int oneUnitMinutes = 5;
+        addButtonsToMessage(sm, 2,
+                List.of("5 мин", "10 мин", "15 мин", "20 мин"),
+                List.of(musicString + "_5", musicString + "_10", musicString + "+15", musicString + "_20"));
+    }
 
+    public void addCitiesButtons(final SendMessage sm, final Set<City> cities) {
+        addButtonsToMessage(sm, 2,
+                cities.stream().map(city -> city.label).collect(Collectors.toList()),
+                cities.stream().map(Enum::name).collect(Collectors.toList()));
+    }
+
+    private void addButtonsToMessage(final SendMessage sm, final int buttonsInRow, final List<String> buttonTextList, final List<String> callbackDataList) {
         var markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
 
         List<InlineKeyboardButton> row = new ArrayList<>();
-        for (int index = 1; index <= 4; index++) {
+        for (int index = 0; index < buttonTextList.size(); ) {
             var button = new InlineKeyboardButton();
-            button.setText(oneUnitMinutes * index + " мин");
-            button.setCallbackData(musicString + "_" + oneUnitMinutes * index);
+            button.setText(buttonTextList.get(index));
+            button.setCallbackData(callbackDataList.get(index));
             row.add(button);
-            if (index % 2 == 0) {
+            if (++index % buttonsInRow == 0 || index == buttonTextList.size()) {
                 keyboard.add(row);
                 row = new ArrayList<>();
             }

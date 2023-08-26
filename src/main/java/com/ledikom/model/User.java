@@ -1,12 +1,12 @@
 package com.ledikom.model;
 
+import com.ledikom.utils.City;
 import com.ledikom.utils.UserResponseState;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -25,6 +25,7 @@ public class User {
     private Boolean receiveNews;
     private UserResponseState responseState;
     private String note;
+    private City city;
 
     public User(final Long chatId, final Integer referralCount, final Boolean receiveNews, final UserResponseState responseState) {
         this.chatId = chatId;

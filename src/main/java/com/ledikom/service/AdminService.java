@@ -31,15 +31,17 @@ public class AdminService {
     private final PollService pollService;
     private final UserService userService;
     private final LedikomBot ledikomBot;
+    private final CouponService couponService;
 
     private SendMessageCallback sendMessageCallback;
     private SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
 
-    public AdminService(final BotUtilityService botUtilityService, final PollService pollService, final UserService userService, final LedikomBot ledikomBot) {
+    public AdminService(final BotUtilityService botUtilityService, final PollService pollService, final UserService userService, final LedikomBot ledikomBot, final CouponService couponService) {
         this.botUtilityService = botUtilityService;
         this.pollService = pollService;
         this.userService = userService;
         this.ledikomBot = ledikomBot;
+        this.couponService = couponService;
     }
 
     @PostConstruct
@@ -91,6 +93,8 @@ public class AdminService {
 
         if (splitStringsFromAdminMessage.get(0).equals(AdminMessageToken.NEWS.label)) {
             sendNewsToUsers(requestFromAdmin.getPhotoPath(), splitStringsFromAdminMessage);
+        } else if (splitStringsFromAdminMessage.get(0).equals(AdminMessageToken.COUPON.label)) {
+            couponService.createAndSendNewCoupon(requestFromAdmin.getPhotoPath(), splitStringsFromAdminMessage);
         }
     }
 

@@ -3,29 +3,22 @@ package com.ledikom.service;
 import com.ledikom.bot.LedikomBot;
 import com.ledikom.callback.*;
 import com.ledikom.model.*;
-import com.ledikom.utils.AdminMessageToken;
 import com.ledikom.utils.BotResponses;
-import com.ledikom.utils.City;
 import com.ledikom.utils.UtilityHelper;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 
 @Component
@@ -143,27 +136,32 @@ public class BotService {
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
         SendMessage sm;
-        if (coupon != null) {
-            sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(couponDurationInMinutes), chatId);
+        if (coupon != null && couponService.couponIsActive(coupon)) {
+            sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(coupon.getText(), couponDurationInMinutes), chatId);
             couponService.addCouponButton(sm, coupon, "Активировать", "couponAccept_");
         } else {
-            sm = botUtilityService.buildSendMessage(BotResponses.couponUsedOrGloballyExpiredMessage(), chatId);
+            sm = botUtilityService.buildSendMessage(BotResponses.couponIsNotActive(), chatId);
         }
         sendMessageCallback.execute(sm);
     }
 
-    public void sendCouponIfNotUsed(final String couponCommand, final Long chatId) {
+    public void sendCouponIfNotUsedAndActive(final String couponCommand, final Long chatId) {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
-        if (coupon == null) {
+        if (coupon == null || !couponService.couponIsActive(coupon)) {
             var sm = botUtilityService.buildSendMessage(BotResponses.couponUsedOrGloballyExpiredMessage(), chatId);
             sendMessageCallback.execute(sm);
         } else {
-            String couponTextWithUniqueSign = couponService.generateSignedCouponText(coupon);
-            var sm = botUtilityService.buildSendMessage(BotResponses.initialCouponText(couponTextWithUniqueSign, couponDurationInMinutes), chatId);
-            MessageIdInChat messageIdInChat = sendCouponCallback.execute(sm);
-            couponService.addCouponToMap(messageIdInChat, couponTextWithUniqueSign);
+            String barcode = couponService.generateBarcode(coupon);
+            InputFile barcodeInputFile = couponService.getBarcodeInputFile(barcode);
+
+            String couponTextWithBarcodeAndTimeSign = "Действителен до: " + couponService.getTimeSign() + "\n\n" + barcode + "\n\n" + coupon.getText();
+
+            MessageIdInChat messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
+
+            couponService.addCouponToMap(messageIdInChat, couponTextWithBarcodeAndTimeSign);
+
             userService.removeCouponFromUser(user, coupon);
         }
     }

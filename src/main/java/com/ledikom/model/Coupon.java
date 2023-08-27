@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Getter
@@ -19,31 +20,48 @@ public class Coupon {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private int startMonth;
-    private int startDay;
-    private int endMonth;
-    private int endDay;
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
 
     private String name;
     private String text;
     private String news;
-    private String discount;
+    private String type;
+    private int dailyQuantity;
+    private int quantityUsed;
 
-    private List<Pharma>
+    @ManyToMany(fetch = FetchType.EAGER)
+    private Set<Pharmacy> pharmacies = new HashSet<>();
 
-    public Coupon(final String text, final String name, final int discount) {
-        this.text = text;
-        this.name = name;
-        this.discount = discount;
-    }
-
-    public Coupon(final String text, final String name, final int discount, final LocalDateTime expiryDateTime) {
-        this.text = text;
-        this.name = name;
-        this.discount = discount;
-        this.expiryDateTime = expiryDateTime;
-    }
-
-    @ManyToMany(mappedBy = "coupons")
+    @ManyToMany(mappedBy = "coupons", fetch = FetchType.EAGER)
     private Set<User> users = new HashSet<>();
+
+    public Coupon(final String type, final LocalDateTime startDate, final LocalDateTime endDate, final int dailyQuantity, final int quantityUsed, final List<Pharmacy> pharmacies, final String name, final String text, final String news) {
+        this.type = type;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.dailyQuantity = dailyQuantity;
+        this.quantityUsed = quantityUsed;
+        this.pharmacies = new HashSet<>(pharmacies);
+        this.name = name;
+        this.text = text;
+        this.news = news;
+    }
+
+    public Coupon(final String name, final String text, final String type, final int dailyQuantity) {
+        this.name = name;
+        this.text = text;
+        this.type = type;
+        this.dailyQuantity = dailyQuantity;
+    }
+
+//    coupon&
+//            03&
+//            260823-270823&
+//            2000&
+//            1,4,5&
+//            5% на зубную пасту&
+//    В честь дня стоматолога получите купон 5% на зубную пасту марки Colgate&
+//    Здесь какой-то расширенный текст от сммщика (типа новость к которой будет прикреплен купон)&
+
 }

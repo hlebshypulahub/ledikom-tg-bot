@@ -3,6 +3,7 @@ package com.ledikom.service;
 import com.ledikom.bot.LedikomBot;
 import com.ledikom.callback.SendMessageCallback;
 import com.ledikom.model.Coupon;
+import com.ledikom.model.Pharmacy;
 import com.ledikom.model.PollOption;
 import com.ledikom.model.User;
 import com.ledikom.repository.UserRepository;
@@ -18,6 +19,7 @@ import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -114,8 +116,10 @@ public class UserService {
     }
 
     public void removeCouponFromUser(final User user, final Coupon coupon) {
-        user.getCoupons().remove(coupon);
-        userRepository.save(user);
+        if (coupon != null) {
+            user.getCoupons().remove(coupon);
+            userRepository.save(user);
+        }
     }
 
     public void addNewRefUser(final long chatIdFromRefLink, final long chatId) {
@@ -159,5 +163,10 @@ public class UserService {
         user.setCity(City.valueOf(cityName));
         userRepository.save(user);
         sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAdded(cityName), chatId));
+    }
+
+    public List<User> getAllUsersForCouponCities(final Set<Pharmacy> pharmacies) {
+        List<User> users = getAllUsers();
+        return users.stream().filter(user -> pharmacies.stream().map(Pharmacy::getCity).toList().contains(user.getCity())).toList();
     }
 }

@@ -21,8 +21,8 @@ public final class BotResponses {
                 """;
     }
 
-    public static String couponAcceptMessage(final int durationInMinutes) {
-        return "Купон действует " + durationInMinutes + " минут. Вы уверены что хотите активировать сейчас? Показать на кассe";
+    public static String couponAcceptMessage(final String text, final int durationInMinutes) {
+        return text + "\n\n\n" + "Купон действует " + durationInMinutes + " минут. Вы уверены что хотите активировать сейчас? Показать на кассe";
     }
 
     public static String couponUsedOrGloballyExpiredMessage() {
@@ -49,10 +49,10 @@ public final class BotResponses {
         return "У вас нету купонов";
     }
 
-    public static String initialCouponText(final String couponTextWithUniqueSign, final long couponDurationInMinutes) {
+    public static String initialCouponText(final String couponTextWithBarcode, final long couponDurationInMinutes) {
         return "Времени осталось: " + UtilityHelper.convertIntToTimeInt(couponDurationInMinutes) + ":00" +
                 "\n\n" +
-                couponTextWithUniqueSign;
+                couponTextWithBarcode;
     }
 
     public static String updatedCouponText(final UserCouponRecord userCouponRecord, final long timeLeftInSeconds) {
@@ -66,11 +66,7 @@ public final class BotResponses {
     }
 
     public static String couponButton(final Coupon coupon) {
-        return coupon.getName() + " -" + coupon.getDiscount() + "%";
-    }
-
-    public static String helloCoupon(final int helloCouponDiscount) {
-        return "Приветственный купон -" + helloCouponDiscount + "% на вашу следующую покупку.";
+        return coupon.getName();
     }
 
     public static String noteAdded() {
@@ -103,5 +99,13 @@ public final class BotResponses {
 
     public static String cityAdded(final String cityName) {
         return "Вы выбрали: " + City.valueOf(cityName).label;
+    }
+
+    public static String newCoupon(final Coupon coupon) {
+        return coupon.getNews() + "\n\n" + coupon.getText();
+    }
+
+    public static String couponIsNotActive() {
+        return "Купон неактивен!";
     }
 }

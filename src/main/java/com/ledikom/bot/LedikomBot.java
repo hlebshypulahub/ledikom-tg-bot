@@ -18,6 +18,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.File;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -28,7 +29,6 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 
 @Component
@@ -58,7 +58,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         commandWithChatIdActions.put(cmd -> cmd.startsWith("couponPreview_"),
                 this.botService::sendCouponAcceptMessageIfNotUsed);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("couponAccept_"),
-                this.botService::sendCouponIfNotUsed);
+                this.botService::sendCouponIfNotUsedAndActive);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("/start"),
                 this.botService::processStartRefLinkOnFollow);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("music_"),
@@ -111,7 +111,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-//    kupony - Мои активные купоны
+    //    kupony - Мои активные купоны
 //    zametki - Мои заметки
 //    muzyka_dla_sna - Музыка для сна
 //    moya_ssylka - Моя реферальная ссылка
@@ -175,6 +175,10 @@ public class LedikomBot extends TelegramLongPollingBot {
 
     public DeleteMessageCallback getDeleteMessageCallback() {
         return this::deleteMessage;
+    }
+
+    public EditMessageCallback getEditMessageWithPhotoCallback () {
+        return this::editImageCaptionByMessageId;
     }
 
     @Override
@@ -252,6 +256,20 @@ public class LedikomBot extends TelegramLongPollingBot {
 
         try {
             execute(editMessageText);
+        } catch (Exception e) {
+            log.trace(e.getMessage());
+        }
+    }
+
+    public void editImageCaptionByMessageId(final Long chatId, final int messageId, final String newCaption) {
+        EditMessageCaption editMessageCaption = EditMessageCaption.builder()
+                .chatId(chatId)
+                .messageId(messageId)
+                .caption(newCaption)
+                .build();
+
+        try {
+            execute(editMessageCaption);
         } catch (Exception e) {
             log.trace(e.getMessage());
         }

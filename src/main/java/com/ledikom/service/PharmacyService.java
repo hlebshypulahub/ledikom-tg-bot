@@ -33,4 +33,16 @@ public class PharmacyService {
     public void addCitiesButtons(final SendMessage sm) {
         botUtilityService.addCitiesButtons(sm, pharmacyRepository.findAll().stream().map(Pharmacy::getCity).collect(Collectors.toSet()));
     }
+
+    public Pharmacy findById(final long id) {
+        return pharmacyRepository.findById(id).orElseThrow(() -> new RuntimeException("Pharmacy not found"));
+    }
+
+    public List<Pharmacy> findAll() {
+        return pharmacyRepository.findAll();
+    }
+
+    public void saveAll(final List<Pharmacy> pharmacies) {
+        pharmacyRepository.saveAll(pharmacies);
+    }
 }

@@ -258,10 +258,16 @@ public class CouponService {
     }
 
     public InputFile getBarcodeInputFile(final String barcode) {
-        byte[] imageBytes = restTemplate.getForObject("https://barcodeapi.org/api/Code39/" + barcode, byte[].class);
-        assert imageBytes != null;
-        InputStream imageStream = new ByteArrayInputStream(imageBytes);
-        return new InputFile(imageStream, "image.png");
+        try {
+            byte[] imageBytes = restTemplate.getForObject("https://barcodeapi.org/api/Code39/" + barcode, byte[].class);
+            if (imageBytes != null) {
+                InputStream imageStream = new ByteArrayInputStream(imageBytes);
+                return new InputFile(imageStream, "image.png");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     public String getTimeSign() {

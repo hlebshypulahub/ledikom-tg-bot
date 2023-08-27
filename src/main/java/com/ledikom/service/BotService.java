@@ -156,12 +156,16 @@ public class BotService {
             String barcode = couponService.generateBarcode(coupon);
             InputFile barcodeInputFile = couponService.getBarcodeInputFile(barcode);
 
+            MessageIdInChat messageIdInChat;
             String couponTextWithBarcodeAndTimeSign = "Действителен до: " + couponService.getTimeSign() + "\n\n" + barcode + "\n\n" + coupon.getText();
+            if (barcodeInputFile == null) {
+                couponTextWithBarcodeAndTimeSign = "Штрихкод недоступен, введите номер купона вручную." + "\n\n" + couponTextWithBarcodeAndTimeSign;
+                InputStream audioInputStream = getClass().getResourceAsStream("/no-barcode.jpg");
+                barcodeInputFile = new InputFile(audioInputStream, "image.jpg");
+            }
 
-            MessageIdInChat messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
-
+            messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
             couponService.addCouponToMap(messageIdInChat, couponTextWithBarcodeAndTimeSign);
-
             userService.removeCouponFromUser(user, coupon);
         }
     }

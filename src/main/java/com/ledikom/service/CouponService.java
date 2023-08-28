@@ -11,12 +11,8 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -29,18 +25,10 @@ public class CouponService {
 
     public static final Map<MessageIdInChat, UserCouponRecord> userCoupons = new HashMap<>();
 
-    @Value("${hello-coupon.name}")
-    private String helloCouponName;
-    @Value("${hello-coupon.text}")
-    private String helloCouponText;
-    @Value("${hello-coupon.type}")
-    private String helloCouponType;
-    @Value("${hello-coupon.daily-quantity}")
-    private int helloCouponDailyQuantity;
+    @Value("${hello-coupon.barcode}")
+    private String helloCouponBarcode;
     @Value("${coupon.duration-minutes}")
     private int couponDurationInMinutes;
-    @Value("${coupon.secret}")
-    private int couponSecret;
     @Value("${admin.id}")
     private long adminId;
 
@@ -63,49 +51,39 @@ public class CouponService {
         this.restTemplate = restTemplate;
     }
 
-    // TODO: remove postconstruct
-    @PostConstruct
-    public void createHelloCoupon() {
-        Coupon coupon = new Coupon(helloCouponName, helloCouponText, helloCouponType, helloCouponDailyQuantity);
-        couponRepository.save(coupon);
-
-        List<User> users = userService.getAllUsers();
-        users.forEach(user -> user.getCoupons().add(coupon));
-        userService.saveAll(users);
-    }
-
     @PostConstruct
     public void initCallbacks() {
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
         this.sendMessageWithPhotoCallback = ledikomBot.getSendMessageWithPhotoCallback();
     }
 
-    public Coupon findByName(final String helloCouponName) {
-        return couponRepository.findByName(helloCouponName).orElseThrow(() -> new RuntimeException("Coupon not found"));
-    }
-
-    public Coupon findCouponForUser(final User user, final String couponCommand) {
+    public Coupon findActiveCouponForUser(final User user, final String couponCommand) {
         int couponId = Integer.parseInt(couponCommand.split("_")[1]);
-        return user.getCoupons().stream().filter(c -> c.getId() == couponId).findFirst().orElse(null);
+        return user.getCoupons().stream()
+                .filter(coupon -> coupon.getId() == couponId)
+                .filter(this::couponIsActive)
+                .findFirst()
+                .orElseThrow(() -> {
+                    sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон не найден / завершен / использован", user.getChatId()));
+                    return new RuntimeException("Купон " + couponId + " не найден / завершен / использован для " + user.getChatId());
+                });
     }
 
-    public void addCouponsToUser(final User user) {
-        List<Coupon> coupons = couponRepository.findAll();
+    public Coupon getHelloCoupon() {
+        return couponRepository.findByBarcode(helloCouponBarcode).orElseThrow(() -> new RuntimeException("Hello coupon not found by barcode: " + helloCouponBarcode));
+    }
+
+    public User addAllActiveCouponsToUserByCity(final User user) {
+        List<Coupon> coupons = couponRepository.findAll().stream()
+                .filter(coupon -> coupon.getPharmacies().stream()
+                        .anyMatch(pharmacy -> pharmacy.getCity() == user.getCity()))
+                .toList();
         user.getCoupons().addAll(coupons);
-        userService.saveUser(user);
+        return user;
     }
 
-    public void addCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText, final String callbackData) {
-        var markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
-        var button = new InlineKeyboardButton();
-        button.setText(buttonText);
-        button.setCallbackData(callbackData + coupon.getId());
-        List<InlineKeyboardButton> row = new ArrayList<>();
-        row.add(button);
-        keyboard.add(row);
-        markup.setKeyboard(keyboard);
-        sm.setReplyMarkup(markup);
+    public void addHelloCouponToUser(final User user) {
+        addCouponToUser(couponRepository.findByBarcode(helloCouponBarcode).orElseThrow(() -> new RuntimeException("Hello coupon not found by barcode: " + helloCouponBarcode)), user);
     }
 
     public void addCouponToMap(final MessageIdInChat messageIdInChat, final String couponText) {
@@ -113,60 +91,23 @@ public class CouponService {
         userCoupons.put(messageIdInChat, new UserCouponRecord(expiryTimestamp, couponText));
     }
 
-    public String generateBarcode(final Coupon coupon) {
-        ZoneId moscowZone = ZoneId.of("Europe/Moscow");
-        LocalDateTime zonedDateTime = LocalDateTime.now(moscowZone).plusMinutes(couponDurationInMinutes);
-
-        Coupon savedCouponWithIncreasedQuantityUsed = increaseQuantityUsed(coupon);
-
-        return coupon.getType()
-                + UtilityHelper.convertIntToTimeInt(zonedDateTime.getDayOfMonth())
-                + UtilityHelper.convertIntToTimeInt(zonedDateTime.getMonthValue())
-                + (zonedDateTime.getYear())
-                + getCouponNumber(savedCouponWithIncreasedQuantityUsed)
-                + (Integer.parseInt(coupon.getType()) + zonedDateTime.getDayOfMonth() + zonedDateTime.getMonthValue() + zonedDateTime.getYear() - 2000 + couponSecret);
-    }
-
-    public InlineKeyboardMarkup createListOfCoupons(final Set<Coupon> coupons) {
-        var markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
-
-        for (Coupon coupon : coupons) {
-            var button = new InlineKeyboardButton();
-            button.setText(BotResponses.couponButton(coupon));
-            button.setCallbackData("couponPreview_" + coupon.getId());
-            List<InlineKeyboardButton> row = new ArrayList<>();
-            row.add(button);
-            keyboard.add(row);
-        }
-
-        markup.setKeyboard(keyboard);
-
-        return markup;
-    }
-
     public void createAndSendNewCoupon(final String photoPath, final List<String> splitStringsFromAdminMessage) throws IOException {
         Coupon coupon = getNewCoupon(splitStringsFromAdminMessage);
         couponRepository.save(coupon);
+
         List<User> usersForCouponCities = userService.getAllUsersForCouponCities(coupon.getPharmacies());
         usersForCouponCities.forEach(user -> addCouponToUser(coupon, user));
 
-        if (photoPath == null || photoPath.isBlank()) {
-            usersForCouponCities.forEach(user -> {
-                var sm = botUtilityService.buildSendMessage(BotResponses.newCoupon(coupon), user.getChatId());
-                addCouponButton(sm, coupon, "Активировать купон", "couponPreview_");
-                sendMessageCallback.execute(sm);
-            });
-        } else {
+        if (photoPath != null) {
             InputStream imageStream = new URL(photoPath).openStream();
             InputFile inputFile = new InputFile(imageStream, "image.jpg");
-            usersForCouponCities.forEach(user -> {
-                sendMessageWithPhotoCallback.execute(inputFile, "", user.getChatId());
-                var sm = botUtilityService.buildSendMessage(BotResponses.newCoupon(coupon), user.getChatId());
-                addCouponButton(sm, coupon, "Активировать купон", "couponPreview_");
-                sendMessageCallback.execute(sm);
-            });
+            usersForCouponCities.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, "", user.getChatId()));
         }
+        usersForCouponCities.forEach(user -> {
+            var sm = botUtilityService.buildSendMessage(BotResponses.newCoupon(coupon), user.getChatId());
+            botUtilityService.addCouponButton(sm, coupon, "Активировать купон", "couponPreview_");
+            sendMessageCallback.execute(sm);
+        });
     }
 
     private void addCouponToUser(final Coupon coupon, final User user) {
@@ -174,55 +115,80 @@ public class CouponService {
         userService.saveUser(user);
     }
 
+    // TODO: add regex checks and split on methods
     public Coupon getNewCoupon(final List<String> splitStringsFromAdminMessage) {
-        List<String> trimmedStrings = splitStringsFromAdminMessage.stream().map(String::trim).toList();
 
-        String type = trimmedStrings.get(1);
+        String barcode = splitStringsFromAdminMessage.get(1);
 
-        String[] splitDates = trimmedStrings.get(2).split("-");
-        LocalDateTime startDate = LocalDateTime.of(
-                2000 + Integer.parseInt(splitDates[0].substring(4)),
-                Integer.parseInt(splitDates[0].substring(2, 4)),
-                Integer.parseInt(splitDates[0].substring(0, 2)),
-                0, 0);
-        LocalDateTime endDate = LocalDateTime.of(
-                2000 + Integer.parseInt(splitDates[splitDates.length - 1].substring(4)),
-                Integer.parseInt(splitDates[splitDates.length - 1].substring(2, 4)),
-                Integer.parseInt(splitDates[splitDates.length - 1].substring(0, 2)),
-                23, 59);
+        byte[] barcodeImageByteArray;
+        try {
+            barcodeImageByteArray = restTemplate.getForObject("https://barcodeapi.org/api/EAN13/" + barcode, byte[].class);
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+            String noBarcodeImagePath = "/no-barcode.jpg";
+            try (InputStream inputStream = CouponService.class.getResourceAsStream(noBarcodeImagePath)) {
+                if (inputStream == null) {
+                    throw new IOException("Image file not found: " + noBarcodeImagePath);
+                }
+                barcodeImageByteArray = inputStream.readAllBytes();
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
 
-        int quantity = Integer.parseInt(trimmedStrings.get(3));
+        String datesArgument = splitStringsFromAdminMessage.get(2);
+        LocalDateTime startDate, endDate;
+        if (datesArgument.isBlank()) {
+            startDate = null;
+            endDate = null;
+        } else {
+            String[] splitDates = datesArgument.split("-");
+            startDate = LocalDateTime.of(
+                    2000 + Integer.parseInt(splitDates[0].substring(4)),
+                    Integer.parseInt(splitDates[0].substring(2, 4)),
+                    Integer.parseInt(splitDates[0].substring(0, 2)),
+                    0, 0);
+            endDate = LocalDateTime.of(
+                    2000 + Integer.parseInt(splitDates[splitDates.length - 1].substring(4)),
+                    Integer.parseInt(splitDates[splitDates.length - 1].substring(2, 4)),
+                    Integer.parseInt(splitDates[splitDates.length - 1].substring(0, 2)),
+                    23, 59);
+        }
 
         List<Pharmacy> pharmacies = new ArrayList<>();
-        if (trimmedStrings.get(4).equals("all")) {
+        String pharmaciesArgument = splitStringsFromAdminMessage.get(3);
+        if (pharmaciesArgument.isBlank()) {
             pharmacies.addAll(pharmacyService.findAll());
         } else {
-            String[] pharmacyIds = trimmedStrings.get(4).split(",");
+            String[] pharmacyIds = pharmaciesArgument.split(",");
             for (String id : pharmacyIds) {
                 pharmacies.add(pharmacyService.findById(Long.parseLong(id)));
             }
         }
 
-        String name = trimmedStrings.get(5);
-        String text = trimmedStrings.get(6);
-        String news = trimmedStrings.get(7);
+        String name = splitStringsFromAdminMessage.get(4);
+        String text = splitStringsFromAdminMessage.get(5);
+        String news = splitStringsFromAdminMessage.get(6);
 
-        Coupon coupon = new Coupon(type, startDate, endDate, quantity, 0, pharmacies, name, text, news);
+        Coupon coupon = new Coupon(barcode, barcodeImageByteArray, startDate, endDate, pharmacies, name, text, news);
 
-        if (couponIsActive(coupon)) {
-            return coupon;
+        if (!couponIsActive(coupon)) {
+            sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон неактивен! Проверьте даты действия!", adminId));
+            throw new RuntimeException("Купон неактивен! Проверьте даты действия!");
         }
 
-        sendMessageCallback.execute(botUtilityService.buildSendMessage("Формат купона неверен!", adminId));
-        throw new RuntimeException("Coupon is not valid!");
+        return coupon;
     }
 
     public boolean couponIsActive(final Coupon coupon) {
         LocalDateTime zonedDateTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
-        if (coupon.getStartDate() != null && coupon.getEndDate() != null) {
-            return zonedDateTime.isAfter(coupon.getStartDate()) && zonedDateTime.isBefore(coupon.getEndDate()) && coupon.getDailyQuantity() - coupon.getQuantityUsed() > 0;
+        if (coupon.getStartDate() == null && coupon.getEndDate() == null) {
+            return true;
         }
-        return coupon.getDailyQuantity() - coupon.getQuantityUsed() > 0;
+        if (coupon.getStartDate() != null && coupon.getEndDate() != null) {
+            return zonedDateTime.isAfter(coupon.getStartDate()) && zonedDateTime.isBefore(coupon.getEndDate());
+        }
+        return false;
     }
 
     public void deleteExpiredCouponsAndReset() {
@@ -235,39 +201,6 @@ public class CouponService {
             userService.saveUser(user);
         }));
         couponRepository.deleteAll(couponsToDelete);
-
-        coupons = couponRepository.findAll();
-        coupons.forEach(coupon -> coupon.setQuantityUsed(0));
-        couponRepository.saveAll(coupons);
-    }
-
-    private Coupon increaseQuantityUsed(final Coupon coupon) {
-        coupon.setQuantityUsed(coupon.getQuantityUsed() + 1);
-        return couponRepository.save(coupon);
-    }
-
-    private String getCouponNumber(final Coupon coupon) {
-        int number = coupon.getQuantityUsed();
-        if (number < 10)
-            return "000" + number;
-        if (number < 100)
-            return "00" + number;
-        if (number < 1000)
-            return "0" + number;
-        return String.valueOf(number);
-    }
-
-    public InputFile getBarcodeInputFile(final String barcode) {
-        try {
-            byte[] imageBytes = restTemplate.getForObject("https://barcodeapi.org/api/Code39/" + barcode, byte[].class);
-            if (imageBytes != null) {
-                InputStream imageStream = new ByteArrayInputStream(imageBytes);
-                return new InputFile(imageStream, "image.png");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
     }
 
     public String getTimeSign() {

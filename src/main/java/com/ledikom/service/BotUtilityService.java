@@ -1,6 +1,8 @@
 package com.ledikom.service;
 
 import com.ledikom.callback.GetFileFromBotCallback;
+import com.ledikom.model.Coupon;
+import com.ledikom.utils.BotResponses;
 import com.ledikom.utils.City;
 import com.ledikom.utils.MusicMenuButton;
 import org.springframework.beans.factory.annotation.Value;
@@ -104,5 +106,36 @@ public class BotUtilityService {
 
         markup.setKeyboard(keyboard);
         sm.setReplyMarkup(markup);
+    }
+
+    public void addCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText, final String callbackData) {
+        var markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        var button = new InlineKeyboardButton();
+        button.setText(buttonText);
+        button.setCallbackData(callbackData + coupon.getId());
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        row.add(button);
+        keyboard.add(row);
+        markup.setKeyboard(keyboard);
+        sm.setReplyMarkup(markup);
+    }
+
+    public InlineKeyboardMarkup createListOfCoupons(final Set<Coupon> coupons) {
+        var markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+
+        for (Coupon coupon : coupons) {
+            var button = new InlineKeyboardButton();
+            button.setText(BotResponses.couponButton(coupon));
+            button.setCallbackData("couponPreview_" + coupon.getId());
+            List<InlineKeyboardButton> row = new ArrayList<>();
+            row.add(button);
+            keyboard.add(row);
+        }
+
+        markup.setKeyboard(keyboard);
+
+        return markup;
     }
 }

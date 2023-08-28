@@ -2,6 +2,7 @@ package com.ledikom.bot;
 
 import com.ledikom.callback.*;
 import com.ledikom.model.MessageIdInChat;
+import com.ledikom.service.AdminService;
 import com.ledikom.service.BotService;
 import com.ledikom.service.UserService;
 import com.ledikom.utils.City;
@@ -43,14 +44,16 @@ public class LedikomBot extends TelegramLongPollingBot {
 
     private final BotService botService;
     private final UserService userService;
+    private final AdminService adminService;
 
     private static final Logger log = LoggerFactory.getLogger(LedikomBot.class);
     private static final Map<Predicate<String>, ChatIdCallback> chatIdActions = new HashMap<>();
     private static final Map<Predicate<String>, CommandWithChatIdCallback> commandWithChatIdActions = new HashMap<>();
 
-    public LedikomBot(@Lazy final BotService botService, @Lazy final UserService userService) {
+    public LedikomBot(@Lazy final BotService botService, @Lazy final UserService userService, @Lazy final AdminService adminService) {
         this.botService = botService;
         this.userService = userService;
+        this.adminService = adminService;
     }
 
     @PostConstruct
@@ -60,11 +63,11 @@ public class LedikomBot extends TelegramLongPollingBot {
         commandWithChatIdActions.put(cmd -> cmd.startsWith("couponAccept_"),
                 this.botService::sendCouponIfNotUsedAndActive);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("/start"),
-                this.botService::processStartRefLinkOnFollow);
+                this.botService::processStartOrRefLinkFollow);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("music_"),
                 this.botService::processMusicRequest);
         commandWithChatIdActions.put(cmd -> Arrays.stream(City.values()).map(Enum::name).toList().contains(cmd),
-                this.userService::addCityToUser);
+                this.userService::setCityToUserAndAddCoupons);
         chatIdActions.put(cmd -> cmd.equals("/kupony"),
                 this.botService::sendAllCouponsList);
         chatIdActions.put(cmd -> cmd.equals("/moya_ssylka"),
@@ -93,7 +96,7 @@ public class LedikomBot extends TelegramLongPollingBot {
             }
             if (Objects.equals(chatId, adminId) && !userIsInActiveState) {
                 try {
-                    botService.processAdminRequest(update);
+                    adminService.processAdminRequest(update);
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
@@ -107,7 +110,7 @@ public class LedikomBot extends TelegramLongPollingBot {
                 throw new RuntimeException(e);
             }
         } else if (update.hasPoll()) {
-            botService.processPoll(update.getPoll());
+            userService.processPoll(update.getPoll());
         }
     }
 
@@ -143,7 +146,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         boolean userIsInActiveState = userService.userIsInActiveState(chatId);
 
         if (!processed && userIsInActiveState) {
-            botService.processStatefulUserResponse(command, chatId);
+            userService.processStatefulUserResponse(command, chatId);
         }
 
         return userIsInActiveState;
@@ -177,7 +180,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         return this::deleteMessage;
     }
 
-    public EditMessageCallback getEditMessageWithPhotoCallback () {
+    public EditMessageCallback getEditMessageWithPhotoCallback() {
         return this::editImageCaptionByMessageId;
     }
 

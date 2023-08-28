@@ -2,10 +2,8 @@ package com.ledikom.service;
 
 import com.ledikom.bot.LedikomBot;
 import com.ledikom.callback.SendMessageCallback;
-import com.ledikom.model.Coupon;
-import com.ledikom.model.Pharmacy;
-import com.ledikom.model.PollOption;
-import com.ledikom.model.User;
+import com.ledikom.callback.SendMessageWithPhotoCallback;
+import com.ledikom.model.*;
 import com.ledikom.repository.UserRepository;
 import com.ledikom.utils.BotResponses;
 import com.ledikom.utils.City;
@@ -15,8 +13,12 @@ import jakarta.persistence.*;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -36,6 +38,7 @@ public class UserService {
     private final LedikomBot ledikomBot;
 
     private SendMessageCallback sendMessageCallback;
+    private SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
 
     public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService, final BotUtilityService botUtilityService, @Lazy final LedikomBot ledikomBot) {
         this.userRepository = userRepository;
@@ -48,6 +51,7 @@ public class UserService {
     @PostConstruct
     public void initCallbacks() {
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
+        this.sendMessageWithPhotoCallback = ledikomBot.getSendMessageWithPhotoCallback();
     }
 
     public List<User> getAllUsers() {
@@ -61,7 +65,7 @@ public class UserService {
     public void addNewUser(final Long chatId) {
         User user = new User(chatId, INIT_REFERRAL_COUNT, INIT_RECEIVE_NEWS, INIT_RESPONSE_STATE);
         userRepository.save(user);
-        couponService.addCouponsToUser(user);
+        couponService.addHelloCouponToUser(user);
     }
 
     public void saveUser(final User user) {
@@ -103,16 +107,17 @@ public class UserService {
         }
     }
 
-    public String processStatefulUserResponse(final String text, final Long chatId) {
+    public void processStatefulUserResponse(final String text, final Long chatId) {
         User user = findByChatId(chatId);
         if (user.getResponseState() == UserResponseState.SENDING_NOTE) {
             user.setNote(text);
             user.setResponseState(UserResponseState.NONE);
             saveUser(user);
-            return BotResponses.noteAdded();
+            sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.noteAdded(), chatId));
+        } else {
+            sendMessageCallback.execute(botUtilityService.buildSendMessage("Нет такой команды!", chatId));
+            throw new RuntimeException("Нет такой команды: " + text);
         }
-
-        return "Нет такой команды!";
     }
 
     public void removeCouponFromUser(final User user, final Coupon coupon) {
@@ -158,9 +163,10 @@ public class UserService {
         return findByChatId(chatId).getResponseState() != UserResponseState.NONE;
     }
 
-    public void addCityToUser(final String cityName, final Long chatId) {
+    public void setCityToUserAndAddCoupons(final String cityName, final Long chatId) {
         User user = findByChatId(chatId);
         user.setCity(City.valueOf(cityName));
+        user = couponService.addAllActiveCouponsToUserByCity(user);
         userRepository.save(user);
         sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAdded(cityName), chatId));
     }
@@ -168,5 +174,22 @@ public class UserService {
     public List<User> getAllUsersForCouponCities(final Set<Pharmacy> pharmacies) {
         List<User> users = getAllUsers();
         return users.stream().filter(user -> pharmacies.stream().map(Pharmacy::getCity).toList().contains(user.getCity())).toList();
+    }
+
+    public void sendNewsToUsers(final NewsFromAdmin newsFromAdmin) throws IOException {
+        List<User> usersToSendNews = getAllUsersToReceiveNews();
+
+        if (newsFromAdmin.getPhotoPath() == null) {
+            usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendMessage(newsFromAdmin.getNews(), user.getChatId())));
+        } else {
+            InputStream imageStream = new URL(newsFromAdmin.getPhotoPath()).openStream();
+            InputFile inputFile = new InputFile(imageStream, "image.jpg");
+            usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, newsFromAdmin.getNews(), user.getChatId()));
+        }
+    }
+
+    public void sendPollToUsers(final Poll poll) {
+        List<User> usersToSendNews = getAllUsersToReceiveNews();
+        usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendPoll(poll, user.getChatId())));
     }
 }

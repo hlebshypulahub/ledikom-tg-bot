@@ -9,8 +9,10 @@ import com.ledikom.model.NewsFromAdmin;
 import com.ledikom.model.User;
 import com.ledikom.utils.AdminMessageToken;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
@@ -27,88 +29,111 @@ public class AdminService {
 
     public static final String DELIMITER = "&";
 
+    @Value("${admin.id}")
+    private Long adminId;
+    @Value("${hello-coupon.barcode}")
+    private String helloCouponBarcode;
+
     private final BotUtilityService botUtilityService;
     private final PollService pollService;
     private final UserService userService;
     private final LedikomBot ledikomBot;
+    private final CouponService couponService;
 
     private SendMessageCallback sendMessageCallback;
-    private SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
+    private GetFileFromBotCallback getFileFromBotCallback;
 
-    public AdminService(final BotUtilityService botUtilityService, final PollService pollService, final UserService userService, final LedikomBot ledikomBot) {
+    public AdminService(final BotUtilityService botUtilityService, final PollService pollService, final UserService userService, final LedikomBot ledikomBot, final CouponService couponService) {
         this.botUtilityService = botUtilityService;
         this.pollService = pollService;
         this.userService = userService;
         this.ledikomBot = ledikomBot;
+        this.couponService = couponService;
     }
 
     @PostConstruct
-    public void initCallbacks() {
+    public void initCallbacks() throws IOException {
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
-        this.sendMessageWithPhotoCallback = ledikomBot.getSendMessageWithPhotoCallback();
+        this.getFileFromBotCallback = ledikomBot.getGetFileFromBotCallback();
+        sendStartupInfoToAdmin();
     }
 
-    public List<String> getSplitStrings(final String messageFromAdmin) {
-        if (messageFromAdmin == null || messageFromAdmin.isBlank()) {
-            return List.of(AdminMessageToken.NEWS.label);
+    public void sendStartupInfoToAdmin() throws IOException {
+//        sendMessageCallback.execute(botUtilityService.buildSendMessage("Создайте приветсвенный купон перед запуском бота в использование!"
+//                + "\nСкопируйте текст из сообщения ниже, измените название купона и текст и отправьте.", adminId));
+//        sendMessageCallback.execute(botUtilityService.buildSendMessage("""
+//                coupon&
+//                &
+//                &
+//                &
+//                Приветственный купон -5%&
+//                Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!&""", adminId));
+
+        couponService.createAndSendNewCoupon(null, List.of("coupon", helloCouponBarcode, "", "", "Приветственный купон -5%",
+                "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!", ""));
+    }
+
+    public void processAdminRequest(final Update update) throws IOException {
+        if (update.hasMessage() && update.getMessage().hasPoll()) {
+            executeAdminActionOnPollReceived(update.getMessage().getPoll());
+        } else if (update.hasMessage()) {
+            executeAdminActionOnMessageReceived(update.getMessage());
         }
-        List<String> splitStringsFromAdminMessage = new ArrayList<>(Arrays.stream(messageFromAdmin.split(DELIMITER)).map(String::trim).toList());
-        splitStringsFromAdminMessage.set(0, splitStringsFromAdminMessage.get(0).toLowerCase());
-        return splitStringsFromAdminMessage;
-    }
-
-    public NewsFromAdmin getNewsByAdmin(final List<String> splitStringsFromAdminMessage, final String photoPath) {
-        return new NewsFromAdmin(splitStringsFromAdminMessage.size() > 1 ? splitStringsFromAdminMessage.get(1) : "", photoPath);
-    }
-
-    public RequestFromAdmin getRequestFromAdmin(final Update update, final GetFileFromBotCallback getFileFromBotCallback) {
-        RequestFromAdmin requestFromAdmin = new RequestFromAdmin();
-
-        var msg = update.getMessage();
-        String photoPath;
-        if (msg.hasPhoto() || msg.hasDocument()) {
-            photoPath = botUtilityService.getPhotoFromUpdate(msg, getFileFromBotCallback);
-            requestFromAdmin.setPhotoPath(photoPath);
-            requestFromAdmin.setMessage(msg.getCaption());
-        } else if (msg.hasText()) {
-            requestFromAdmin.setMessage(msg.getText());
-        } else if (msg.hasPoll()) {
-            requestFromAdmin.setPoll(msg.getPoll());
-        }
-
-        return requestFromAdmin;
     }
 
     public void executeAdminActionOnPollReceived(final Poll poll) {
         com.ledikom.model.Poll entityPoll = pollService.tgPollToLedikomPoll(poll);
         entityPoll.setLastVoteTimestamp(LocalDateTime.now());
         pollService.savePoll(entityPoll);
-        sendPollToUsers(poll);
+        userService.sendPollToUsers(poll);
     }
 
-    public void executeAdminActionOnMessageReceived(final RequestFromAdmin requestFromAdmin) throws IOException {
-        List<String> splitStringsFromAdminMessage = getSplitStrings(requestFromAdmin.getMessage());
+    public void executeAdminActionOnMessageReceived(final Message message) throws IOException {
+        String photoPath = null;
+        String text = null;
 
-        if (splitStringsFromAdminMessage.get(0).equals(AdminMessageToken.NEWS.label)) {
-            sendNewsToUsers(requestFromAdmin.getPhotoPath(), splitStringsFromAdminMessage);
+        if (message.hasPhoto() || message.hasDocument()) {
+            photoPath = botUtilityService.getPhotoFromUpdate(message, getFileFromBotCallback);
+            text = message.getCaption();
+        }
+        if (message.hasText()) {
+            text = message.getText();
+        }
+
+        List<String> splitStringsFromAdminMessage = getSplitStrings(text);
+
+        if (splitStringsFromAdminMessage.get(0).equalsIgnoreCase(AdminMessageToken.NEWS.label)) {
+            if (splitStringsFromAdminMessage.size() != AdminMessageToken.NEWS.commandSize) {
+                sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат новости! Количество аргументов не равно " + AdminMessageToken.NEWS.commandSize, adminId));
+                throw new RuntimeException("Неверный формат новости! Количество аргументов не равно " + AdminMessageToken.NEWS.commandSize);
+            }
+            userService.sendNewsToUsers(getNewsByAdmin(splitStringsFromAdminMessage, photoPath));
+        } else if (splitStringsFromAdminMessage.get(0).equalsIgnoreCase(AdminMessageToken.COUPON.label)) {
+            if (splitStringsFromAdminMessage.size() != AdminMessageToken.COUPON.commandSize) {
+                sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат новости! Количество аргументов не равно " + AdminMessageToken.COUPON.commandSize, adminId));
+                throw new RuntimeException("Неверный формат новости! Количество аргументов не равно " + AdminMessageToken.COUPON.commandSize);
+            }
+            couponService.createAndSendNewCoupon(photoPath, splitStringsFromAdminMessage);
         }
     }
 
-    private void sendPollToUsers(final Poll poll) {
-        List<User> usersToSendNews = userService.getAllUsersToReceiveNews();
-        usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendPoll(poll, user.getChatId())));
+    private List<String> getSplitStrings(final String messageFromAdmin) {
+        if (messageFromAdmin == null || messageFromAdmin.isBlank()) {
+            sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Сообщение не может быть пустым!", adminId));
+            throw new RuntimeException("Неверный формат команды! Сообщение не может быть пустым!");
+        }
+
+        List<String> splitStringsFromAdminMessage = new ArrayList<>(Arrays.stream(messageFromAdmin.split(DELIMITER)).map(String::trim).toList());
+
+        if (splitStringsFromAdminMessage.isEmpty()) {
+            sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER, adminId));
+            throw new RuntimeException("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER);
+        }
+
+        return splitStringsFromAdminMessage;
     }
 
-    private void sendNewsToUsers(final String photoPath, final List<String> splitStringsFromAdminMessage) throws IOException {
-        NewsFromAdmin newsFromAdmin = getNewsByAdmin(splitStringsFromAdminMessage, photoPath);
-        List<User> usersToSendNews = userService.getAllUsersToReceiveNews();
-
-        if (newsFromAdmin.getPhotoPath() == null || newsFromAdmin.getPhotoPath().isBlank()) {
-            usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendMessage(newsFromAdmin.getNews(), user.getChatId())));
-        } else {
-            InputStream imageStream = new URL(photoPath).openStream();
-            InputFile inputFile = new InputFile(imageStream, "image.jpg");
-            usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, newsFromAdmin.getNews(), user.getChatId()));
-        }
+    private NewsFromAdmin getNewsByAdmin(final List<String> splitStringsFromAdminMessage, final String photoPath) {
+        return new NewsFromAdmin(splitStringsFromAdminMessage.get(1), photoPath);
     }
 }

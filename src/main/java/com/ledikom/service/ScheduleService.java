@@ -7,7 +7,6 @@ import com.ledikom.model.UserCouponRecord;
 import com.ledikom.utils.BotResponses;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -15,6 +14,7 @@ import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage
 
 import java.time.LocalDateTime;
 
+// TODO: add logs
 @Service
 public class ScheduleService {
 
@@ -25,31 +25,43 @@ public class ScheduleService {
 
     private final BotUtilityService botUtilityService;
     private final PollService pollService;
+    private final CouponService couponService;
     private final LedikomBot ledikomBot;
 
-    public ScheduleService(final BotUtilityService botUtilityService, final PollService pollService, final LedikomBot ledikomBot) {
+    public ScheduleService(final BotUtilityService botUtilityService, final PollService pollService, final CouponService couponService, final LedikomBot ledikomBot) {
         this.botUtilityService = botUtilityService;
         this.pollService = pollService;
+        this.couponService = couponService;
         this.ledikomBot = ledikomBot;
     }
 
     private SendMessageCallback sendMessageCallback;
-    private EditMessageCallback editMessageCallback;
+    private EditMessageCallback editMessageWithPhotoCallback;
     private DeleteMessageCallback deleteMessageCallback;
 
     @PostConstruct
     public void initCallbacks() {
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
-        this.editMessageCallback = ledikomBot.getEditMessageCallback();
+        this.editMessageWithPhotoCallback = ledikomBot.getEditMessageWithPhotoCallback();
         this.deleteMessageCallback = ledikomBot.getDeleteMessageCallback();
     }
 
     @Scheduled(fixedRate = 1000)
     public void processCouponsInMap() {
         CouponService.userCoupons.entrySet().removeIf(userCoupon -> {
-            updateCouponTimerAndMessage(userCoupon.getKey(), userCoupon.getValue());
-            return userCoupon.getValue().getExpiryTimestamp() < System.currentTimeMillis() - 1000 * DELETION_EPSILON_SECONDS;
+            long timeLeftInSeconds = (userCoupon.getValue().getExpiryTimestamp() - System.currentTimeMillis()) / 1000;
+            if (timeLeftInSeconds > 0) {
+                updateCouponTimerAndMessage(userCoupon.getKey(), userCoupon.getValue(), timeLeftInSeconds);
+                return false;
+            }
+            deleteCouponTimerAndMessage(userCoupon.getKey());
+            return true;
         });
+    }
+
+    @Scheduled(cron = "0 0 0 * * *", zone = "GMT+3")
+    public void deleteExpiredCoupons() {
+        couponService.deleteExpiredCouponsAndReset();
     }
 
     @Scheduled(fixedRate = 1000 * 60)
@@ -74,12 +86,15 @@ public class ScheduleService {
         sendMessageCallback.execute(sm);
     }
 
-    private void updateCouponTimerAndMessage(final MessageIdInChat messageIdInChat, final UserCouponRecord userCouponRecord) {
-        long timeLeftInSeconds = (userCouponRecord.getExpiryTimestamp() - System.currentTimeMillis()) / 1000;
-        if (timeLeftInSeconds >= 0) {
-            editMessageCallback.execute(messageIdInChat.getChatId(), messageIdInChat.getMessageId(), BotResponses.updatedCouponText(userCouponRecord, timeLeftInSeconds));
-        } else {
-            editMessageCallback.execute(messageIdInChat.getChatId(), messageIdInChat.getMessageId(), BotResponses.couponExpiredMessage());
-        }
+    private void updateCouponTimerAndMessage(final MessageIdInChat messageIdInChat, final UserCouponRecord userCouponRecord, final long timeLeftInSeconds) {
+        editMessageWithPhotoCallback.execute(messageIdInChat.getChatId(), messageIdInChat.getMessageId(), BotResponses.updatedCouponText(userCouponRecord, timeLeftInSeconds));
+    }
+
+    private void deleteCouponTimerAndMessage(final MessageIdInChat messageIdInChat) {
+        deleteMessageCallback.execute(DeleteMessage.builder()
+                .chatId(messageIdInChat.getChatId())
+                .messageId(messageIdInChat.getMessageId())
+                .build());
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.couponExpiredMessage(), messageIdInChat.getChatId()));
     }
 }

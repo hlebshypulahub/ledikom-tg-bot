@@ -4,7 +4,6 @@ import com.ledikom.bot.LedikomBot;
 import com.ledikom.callback.*;
 import com.ledikom.model.*;
 import com.ledikom.utils.BotResponses;
-import com.ledikom.utils.City;
 import com.ledikom.utils.UtilityHelper;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,10 +12,8 @@ import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
-import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
-import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -28,29 +25,25 @@ public class BotService {
 
     @Value("${bot.username}")
     private String botUsername;
-    @Value("${hello-coupon.name}")
-    private String helloCouponName;
     @Value("${coupon.duration-minutes}")
     private int couponDurationInMinutes;
+    @Value("${admin.id}")
+    private Long adminId;
 
     private final UserService userService;
     private final CouponService couponService;
     private final BotUtilityService botUtilityService;
-    private final AdminService adminService;
     private final PharmacyService pharmacyService;
     private final LedikomBot ledikomBot;
 
     private SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
-    private GetFileFromBotCallback getFileFromBotCallback;
-    private SendCouponCallback sendCouponCallback;
     private SendMessageCallback sendMessageCallback;
     private SendMusicFileCallback sendMusicFileCallback;
 
-    public BotService(final UserService userService, final CouponService couponService, final BotUtilityService botUtilityService, final AdminService adminService, final PharmacyService pharmacyService, @Lazy final LedikomBot ledikomBot) {
+    public BotService(final UserService userService, final CouponService couponService, final BotUtilityService botUtilityService, final PharmacyService pharmacyService, @Lazy final LedikomBot ledikomBot) {
         this.userService = userService;
         this.couponService = couponService;
         this.botUtilityService = botUtilityService;
-        this.adminService = adminService;
         this.pharmacyService = pharmacyService;
         this.ledikomBot = ledikomBot;
     }
@@ -58,26 +51,11 @@ public class BotService {
     @PostConstruct
     public void initCallbacks() {
         this.sendMessageWithPhotoCallback = ledikomBot.getSendMessageWithPhotoCallback();
-        this.getFileFromBotCallback = ledikomBot.getGetFileFromBotCallback();
-        this.sendCouponCallback = ledikomBot.getSendCouponCallback();
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
         this.sendMusicFileCallback = ledikomBot.getSendMusicFileCallback();
     }
 
-    public void processAdminRequest(final Update update) throws IOException {
-        RequestFromAdmin requestFromAdmin = adminService.getRequestFromAdmin(update, getFileFromBotCallback);
-        if (requestFromAdmin.isPoll()) {
-            adminService.executeAdminActionOnPollReceived(requestFromAdmin.getPoll());
-        } else {
-            adminService.executeAdminActionOnMessageReceived(requestFromAdmin);
-        }
-    }
-
-    public void processPoll(final Poll poll) {
-        userService.processPoll(poll);
-    }
-
-    public void processStartRefLinkOnFollow(final String command, final Long chatId) {
+    public void processStartOrRefLinkFollow(final String command, final Long chatId) {
         if (!command.endsWith("/start")) {
             String refCode = command.substring(7);
             userService.addNewRefUser(Long.parseLong(refCode), chatId);
@@ -107,16 +85,17 @@ public class BotService {
         }
     }
 
-    public void processStatefulUserResponse(final String text, final Long chatId) {
-        String feedbackMessage = userService.processStatefulUserResponse(text, chatId);
-        sendMessageCallback.execute(botUtilityService.buildSendMessage(feedbackMessage, chatId));
+    public void sendMusicMenu(final long chatId) {
+        var sm = botUtilityService.buildSendMessage(BotResponses.musicMenu(), chatId);
+        botUtilityService.addMusicMenuButtonsToSendMessage(sm);
+        sendMessageCallback.execute(sm);
     }
 
     private void addUserAndSendHelloMessage(final long chatId) {
         if (!userService.userExistsByChatId(chatId)) {
             userService.addNewUser(chatId);
             var sm = botUtilityService.buildSendMessage(BotResponses.startMessage(), chatId);
-            couponService.addCouponButton(sm, couponService.findByName(helloCouponName), "Активировать приветственный купон", "couponPreview_");
+            botUtilityService.addCouponButton(sm, couponService.getHelloCoupon(), "Активировать приветственный купон", "couponPreview_");
             sendMessageCallback.execute(sm);
 
             sm = botUtilityService.buildSendMessage(BotResponses.chooseYourCity(), chatId);
@@ -125,40 +104,33 @@ public class BotService {
         }
     }
 
-    public void sendMusicMenu(final long chatId) {
-        var sm = botUtilityService.buildSendMessage(BotResponses.musicMenu(), chatId);
-        botUtilityService.addMusicMenuButtonsToSendMessage(sm);
-        sendMessageCallback.execute(sm);
-    }
-
     public void sendCouponAcceptMessageIfNotUsed(final String couponCommand, final long chatId) {
         User user = userService.findByChatId(chatId);
-        Coupon coupon = couponService.findCouponForUser(user, couponCommand);
+        Coupon coupon = couponService.findActiveCouponForUser(user, couponCommand);
 
         SendMessage sm;
-        if (coupon != null) {
-            sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(couponDurationInMinutes), chatId);
-            couponService.addCouponButton(sm, coupon, "Активировать", "couponAccept_");
+        if (coupon != null && couponService.couponIsActive(coupon)) {
+            sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(coupon.getText(), couponDurationInMinutes), chatId);
+            botUtilityService.addCouponButton(sm, coupon, "Активировать", "couponAccept_");
         } else {
-            sm = botUtilityService.buildSendMessage(BotResponses.couponUsedOrGloballyExpiredMessage(), chatId);
+            sm = botUtilityService.buildSendMessage(BotResponses.couponIsNotActive(), chatId);
         }
         sendMessageCallback.execute(sm);
     }
 
-    public void sendCouponIfNotUsed(final String couponCommand, final Long chatId) {
+    public void sendCouponIfNotUsedAndActive(final String couponCommand, final Long chatId) {
         User user = userService.findByChatId(chatId);
-        Coupon coupon = couponService.findCouponForUser(user, couponCommand);
+        Coupon coupon = couponService.findActiveCouponForUser(user, couponCommand);
 
-        if (coupon == null) {
-            var sm = botUtilityService.buildSendMessage(BotResponses.couponUsedOrGloballyExpiredMessage(), chatId);
-            sendMessageCallback.execute(sm);
-        } else {
-            String couponTextWithUniqueSign = couponService.generateSignedCouponText(coupon);
-            var sm = botUtilityService.buildSendMessage(BotResponses.initialCouponText(couponTextWithUniqueSign, couponDurationInMinutes), chatId);
-            MessageIdInChat messageIdInChat = sendCouponCallback.execute(sm);
-            couponService.addCouponToMap(messageIdInChat, couponTextWithUniqueSign);
-            userService.removeCouponFromUser(user, coupon);
-        }
+        byte[] barcodeImageByteArray = coupon.getBarcodeImageByteArray();
+        InputFile barcodeInputFile = new InputFile(new ByteArrayInputStream(barcodeImageByteArray), "barcode.jpg");
+
+        MessageIdInChat messageIdInChat;
+        String couponTextWithBarcodeAndTimeSign = "Действителен до: " + couponService.getTimeSign() + "\n\n" + coupon.getBarcode() + "\n\n" + coupon.getText();
+
+        messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
+        couponService.addCouponToMap(messageIdInChat, couponTextWithBarcodeAndTimeSign);
+        userService.removeCouponFromUser(user, coupon);
     }
 
     public void sendAllCouponsList(final Long chatId) {
@@ -170,7 +142,7 @@ public class BotService {
             sm = botUtilityService.buildSendMessage(BotResponses.noActiveCouponsMessage(), chatId);
         } else {
             sm = botUtilityService.buildSendMessage(BotResponses.listOfCouponsMessage(), chatId);
-            sm.setReplyMarkup(couponService.createListOfCoupons(userCoupons));
+            sm.setReplyMarkup(botUtilityService.createListOfCoupons(userCoupons));
         }
         sendMessageCallback.execute(sm);
     }

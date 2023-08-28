@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Getter
@@ -18,24 +19,31 @@ public class Coupon {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String text;
+
+    private String barcode;
+    private byte[] barcodeImageByteArray;
+
+    private LocalDateTime startDate;
+    private LocalDateTime endDate;
+
     private String name;
-    private int discount;
-    private LocalDateTime expiryDateTime;
+    private String text;
+    private String news;
 
-    public Coupon(final String text, final String name, final int discount) {
-        this.text = text;
-        this.name = name;
-        this.discount = discount;
-    }
+    @ManyToMany(fetch = FetchType.EAGER)
+    private Set<Pharmacy> pharmacies = new HashSet<>();
 
-    public Coupon(final String text, final String name, final int discount, final LocalDateTime expiryDateTime) {
-        this.text = text;
-        this.name = name;
-        this.discount = discount;
-        this.expiryDateTime = expiryDateTime;
-    }
-
-    @ManyToMany(mappedBy = "coupons")
+    @ManyToMany(mappedBy = "coupons", fetch = FetchType.EAGER)
     private Set<User> users = new HashSet<>();
+
+    public Coupon(final String barcode, final byte[] barcodeImageByteArray, final LocalDateTime startDate, final LocalDateTime endDate, final List<Pharmacy> pharmacies, final String name, final String text, final String news) {
+        this.barcode = barcode;
+        this.barcodeImageByteArray = barcodeImageByteArray;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.pharmacies = new HashSet<>(pharmacies);
+        this.name = name;
+        this.text = text;
+        this.news = news;
+    }
 }

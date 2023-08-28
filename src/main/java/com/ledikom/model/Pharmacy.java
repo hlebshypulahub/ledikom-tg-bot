@@ -1,13 +1,14 @@
 package com.ledikom.model;
 
 import com.ledikom.utils.City;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Transient;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.util.HashSet;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -17,11 +18,22 @@ import lombok.Setter;
 public class Pharmacy {
 
     @Id
-    private int id;
+    private long id;
     private String name;
     private City city;
     private String openHours;
     private String phoneNumber;
     private String gmapsLink;
 
+    @ManyToMany(mappedBy = "pharmacies", fetch = FetchType.EAGER)
+    private Set<Coupon> coupons = new HashSet<>();
+
+    public Pharmacy(final long id, final String name, final City city, final String openHours, final String phoneNumber, final String gmapsLink) {
+        this.id = id;
+        this.name = name;
+        this.city = city;
+        this.openHours = openHours;
+        this.phoneNumber = phoneNumber;
+        this.gmapsLink = gmapsLink;
+    }
 }

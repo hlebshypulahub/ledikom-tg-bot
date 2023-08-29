@@ -69,7 +69,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         commandWithChatIdActions.put(cmd -> Arrays.stream(City.values()).map(Enum::name).toList().contains(cmd),
                 this.userService::setCityToUserAndAddCoupons);
         chatIdActions.put(cmd -> cmd.equals("/kupony"),
-                this.botService::sendAllCouponsList);
+                this.userService::sendAllCouponsList);
         chatIdActions.put(cmd -> cmd.equals("/moya_ssylka"),
                 this.botService::sendReferralLinkForUser);
         chatIdActions.put(cmd -> cmd.equals("/vkl_otkl_rassylku"),
@@ -78,6 +78,8 @@ public class LedikomBot extends TelegramLongPollingBot {
                 this.botService::sendNoteAndSetUserResponseState);
         chatIdActions.put(cmd -> cmd.equals("/muzyka_dla_sna"),
                 this.botService::sendMusicMenu);
+        chatIdActions.put(cmd -> cmd.equals("/moy_gorod"),
+                this.botService::sendCityMenu);
     }
 
     @Override
@@ -114,11 +116,6 @@ public class LedikomBot extends TelegramLongPollingBot {
         }
     }
 
-    //    kupony - Мои активные купоны
-//    zametki - Мои заметки
-//    muzyka_dla_sna - Музыка для сна
-//    moya_ssylka - Моя реферальная ссылка
-//    vkl_otkl_rassylku - Вкл/Откл рассылку новостей
     private boolean processMessage(String command, Long chatId) throws IOException {
         boolean processed = false;
 

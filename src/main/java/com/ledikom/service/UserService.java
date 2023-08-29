@@ -120,7 +120,7 @@ public class UserService {
         }
     }
 
-    public void removeCouponFromUser(final User user, final Coupon coupon) {
+    public void markCouponAsUsedForUser(final User user, final Coupon coupon) {
         if (coupon != null) {
             user.getCoupons().remove(coupon);
             userRepository.save(user);
@@ -166,9 +166,21 @@ public class UserService {
     public void setCityToUserAndAddCoupons(final String cityName, final Long chatId) {
         User user = findByChatId(chatId);
         user.setCity(City.valueOf(cityName));
-        user = couponService.addAllActiveCouponsToUserByCity(user);
+
+        List<Coupon> activeCouponsForUser = couponService.getAllActiveCouponsToUserByCity(user.getCity());
+        int userCouponsSizeBeforeUpdate = user.getCoupons().size();
+        user.getCoupons().addAll(activeCouponsForUser);
+
+
+
         userRepository.save(user);
-        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAdded(cityName), chatId));
+
+        if (activeCouponsForUser.size() > userCouponsSizeBeforeUpdate) {
+            sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAddedNewCoupons(cityName), chatId));
+            sendAllCouponsList(user.getChatId());
+        } else {
+            sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAdded(cityName), chatId));
+        }
     }
 
     public List<User> getAllUsersForCouponCities(final Set<Pharmacy> pharmacies) {
@@ -186,6 +198,20 @@ public class UserService {
             InputFile inputFile = new InputFile(imageStream, "image.jpg");
             usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, newsFromAdmin.getNews(), user.getChatId()));
         }
+    }
+
+    public void sendAllCouponsList(final Long chatId) {
+        User user = findByChatId(chatId);
+        Set<Coupon> userCoupons = user.getCoupons();
+
+        SendMessage sm;
+        if (userCoupons.isEmpty()) {
+            sm = botUtilityService.buildSendMessage(BotResponses.noActiveCouponsMessage(), chatId);
+        } else {
+            sm = botUtilityService.buildSendMessage(BotResponses.listOfCouponsMessage(), chatId);
+            sm.setReplyMarkup(botUtilityService.createListOfCoupons(userCoupons));
+        }
+        sendMessageCallback.execute(sm);
     }
 
     public void sendPollToUsers(final Poll poll) {

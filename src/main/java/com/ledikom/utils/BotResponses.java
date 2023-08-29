@@ -108,4 +108,15 @@ public final class BotResponses {
     public static String couponIsNotActive() {
         return "Купон неактивен!";
     }
+
+    public static String yourCityCanUpdate(final City city) {
+        return "Ваш город" + (city == null ?
+                " неуказан.\n\nУстановите в меню ниже, чтобы получать актуальные новости и акции только для вашего города!"
+                :
+                ": " + city.label + ".\n\nМожете изменить в меню ниже.");
+    }
+
+    public static String cityAddedNewCoupons(final String cityName) {
+        return "Вы выбрали: " + City.valueOf(cityName).label + "\n\nПроверьте и воспользуйтесь вашими новыми купонами!";
+    }
 }

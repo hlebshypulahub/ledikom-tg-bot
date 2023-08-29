@@ -6,6 +6,7 @@ import com.ledikom.callback.SendMessageWithPhotoCallback;
 import com.ledikom.model.*;
 import com.ledikom.repository.CouponRepository;
 import com.ledikom.utils.BotResponses;
+import com.ledikom.utils.City;
 import com.ledikom.utils.UtilityHelper;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
@@ -73,13 +74,11 @@ public class CouponService {
         return couponRepository.findByBarcode(helloCouponBarcode).orElseThrow(() -> new RuntimeException("Hello coupon not found by barcode: " + helloCouponBarcode));
     }
 
-    public User addAllActiveCouponsToUserByCity(final User user) {
-        List<Coupon> coupons = couponRepository.findAll().stream()
+    public List<Coupon> getAllActiveCouponsToUserByCity(final City city) {
+        return couponRepository.findAll().stream()
                 .filter(coupon -> coupon.getPharmacies().stream()
-                        .anyMatch(pharmacy -> pharmacy.getCity() == user.getCity()))
+                        .anyMatch(pharmacy -> pharmacy.getCity() == city))
                 .toList();
-        user.getCoupons().addAll(coupons);
-        return user;
     }
 
     public void addHelloCouponToUser(final User user) {
@@ -125,7 +124,7 @@ public class CouponService {
             barcodeImageByteArray = restTemplate.getForObject("https://barcodeapi.org/api/EAN13/" + barcode, byte[].class);
         } catch (RuntimeException e) {
             e.printStackTrace();
-            String noBarcodeImagePath = "/no-barcode.jpg";
+            String noBarcodeImagePath = "/no-barcode.png";
             try (InputStream inputStream = CouponService.class.getResourceAsStream(noBarcodeImagePath)) {
                 if (inputStream == null) {
                     throw new IOException("Image file not found: " + noBarcodeImagePath);

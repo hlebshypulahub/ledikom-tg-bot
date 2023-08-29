@@ -125,26 +125,11 @@ public class BotService {
         byte[] barcodeImageByteArray = coupon.getBarcodeImageByteArray();
         InputFile barcodeInputFile = new InputFile(new ByteArrayInputStream(barcodeImageByteArray), "barcode.jpg");
 
-        MessageIdInChat messageIdInChat;
         String couponTextWithBarcodeAndTimeSign = "Действителен до: " + couponService.getTimeSign() + "\n\n" + coupon.getBarcode() + "\n\n" + coupon.getText();
 
-        messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
+        MessageIdInChat messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
         couponService.addCouponToMap(messageIdInChat, couponTextWithBarcodeAndTimeSign);
-        userService.removeCouponFromUser(user, coupon);
-    }
-
-    public void sendAllCouponsList(final Long chatId) {
-        User user = userService.findByChatId(chatId);
-        Set<Coupon> userCoupons = user.getCoupons();
-
-        SendMessage sm;
-        if (userCoupons.isEmpty()) {
-            sm = botUtilityService.buildSendMessage(BotResponses.noActiveCouponsMessage(), chatId);
-        } else {
-            sm = botUtilityService.buildSendMessage(BotResponses.listOfCouponsMessage(), chatId);
-            sm.setReplyMarkup(botUtilityService.createListOfCoupons(userCoupons));
-        }
-        sendMessageCallback.execute(sm);
+        userService.markCouponAsUsedForUser(user, coupon);
     }
 
     public void sendReferralLinkForUser(final Long chatId) {
@@ -162,5 +147,12 @@ public class BotService {
     public void sendNoteAndSetUserResponseState(final long chatId) {
         List<SendMessage> sendMessageList = userService.processNoteRequestAndBuildSendMessageList(chatId);
         sendMessageList.forEach(sm -> sendMessageCallback.execute(sm));
+    }
+
+    public void sendCityMenu(final long chatId) {
+        User user = userService.findByChatId(chatId);
+        var sm = botUtilityService.buildSendMessage(BotResponses.yourCityCanUpdate(user.getCity()), chatId);
+        pharmacyService.addCitiesButtons(sm);
+        sendMessageCallback.execute(sm);
     }
 }

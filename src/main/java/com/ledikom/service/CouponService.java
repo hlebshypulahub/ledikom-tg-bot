@@ -9,6 +9,7 @@ import com.ledikom.utils.BotResponses;
 import com.ledikom.utils.City;
 import com.ledikom.utils.UtilityHelper;
 import jakarta.annotation.PostConstruct;
+import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -58,11 +59,17 @@ public class CouponService {
         this.sendMessageWithPhotoCallback = ledikomBot.getSendMessageWithPhotoCallback();
     }
 
-    public Coupon findActiveCouponForUser(final User user, final String couponCommand) {
+    @PostConstruct
+    public void saveHelloCoupon() throws IOException {
+        createAndSendNewCoupon(null, List.of("coupon", helloCouponBarcode, "", "", "Приветственный купон -5%",
+                "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!", ""));
+    }
+
+    public Coupon findCouponForUser(final User user, final String couponCommand) {
         int couponId = Integer.parseInt(couponCommand.split("_")[1]);
         return user.getCoupons().stream()
                 .filter(coupon -> coupon.getId() == couponId)
-                .filter(this::couponIsActive)
+                .filter(this::couponIsActiveToUse)
                 .findFirst()
                 .orElseThrow(() -> {
                     sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон не найден / завершен / использован", user.getChatId()));
@@ -74,8 +81,9 @@ public class CouponService {
         return couponRepository.findByBarcode(helloCouponBarcode).orElseThrow(() -> new RuntimeException("Hello coupon not found by barcode: " + helloCouponBarcode));
     }
 
-    public List<Coupon> getAllActiveCouponsToUserByCity(final City city) {
+    public List<Coupon> findAllActiveCouponsForUserByCity(final City city) {
         return couponRepository.findAll().stream()
+                .filter(this::couponIsActive)
                 .filter(coupon -> coupon.getPharmacies().stream()
                         .anyMatch(pharmacy -> pharmacy.getCity() == city))
                 .toList();
@@ -94,19 +102,41 @@ public class CouponService {
         Coupon coupon = getNewCoupon(splitStringsFromAdminMessage);
         couponRepository.save(coupon);
 
-        List<User> usersForCouponCities = userService.getAllUsersForCouponCities(coupon.getPharmacies());
-        usersForCouponCities.forEach(user -> addCouponToUser(coupon, user));
+        if (couponIsActive(coupon)) {
+            List<User> usersForCouponCities = userService.getAllUsersForCouponCities(coupon.getPharmacies());
+            usersForCouponCities.forEach(user -> addCouponToUser(coupon, user));
 
-        if (photoPath != null) {
-            InputStream imageStream = new URL(photoPath).openStream();
-            InputFile inputFile = new InputFile(imageStream, "image.jpg");
-            usersForCouponCities.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, "", user.getChatId()));
+            if (photoPath != null) {
+                InputStream imageStream = new URL(photoPath).openStream();
+                InputFile inputFile = new InputFile(imageStream, "image.jpg");
+                usersForCouponCities.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, "", user.getChatId()));
+            }
+            sendCouponNewsToUsers(coupon, usersForCouponCities);
         }
-        usersForCouponCities.forEach(user -> {
+    }
+
+    public void sendCouponNewsToUsers(final Coupon coupon, final List<User> users) {
+        users.forEach(user -> {
             var sm = botUtilityService.buildSendMessage(BotResponses.newCoupon(coupon), user.getChatId());
             botUtilityService.addCouponButton(sm, coupon, "Активировать купон", "couponPreview_");
             sendMessageCallback.execute(sm);
         });
+    }
+
+    public void addFreshCouponsToUsers() {
+        List<User> users = userService.getAllUsers();
+        List<Coupon> coupons = couponRepository.findAll().stream().filter(this::couponIsActive).toList();
+
+        for (Coupon coupon : coupons) {
+            List<User> usersToSendNews = new ArrayList<>();
+            users.forEach(user -> {
+                if (coupon.getPharmacies().stream().anyMatch(pharmacy -> user.getCity() == null || pharmacy.getCity() == user.getCity())) {
+                    usersToSendNews.add(user);
+                    addCouponToUser(coupon, user);
+                }
+            });
+            sendCouponNewsToUsers(coupon, usersToSendNews);
+        }
     }
 
     private void addCouponToUser(final Coupon coupon, final User user) {
@@ -138,8 +168,13 @@ public class CouponService {
         String datesArgument = splitStringsFromAdminMessage.get(2);
         LocalDateTime startDate, endDate;
         if (datesArgument.isBlank()) {
-            startDate = null;
-            endDate = null;
+            if (barcode.equals(helloCouponBarcode)) {
+                startDate = null;
+                endDate = null;
+            } else {
+                sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон неактивен! Проверьте даты действия!", adminId));
+                throw new RuntimeException("Купон неактивен! Проверьте даты действия!");
+            }
         } else {
             String[] splitDates = datesArgument.split("-");
             startDate = LocalDateTime.of(
@@ -169,17 +204,18 @@ public class CouponService {
         String text = splitStringsFromAdminMessage.get(5);
         String news = splitStringsFromAdminMessage.get(6);
 
-        Coupon coupon = new Coupon(barcode, barcodeImageByteArray, startDate, endDate, pharmacies, name, text, news);
-
-        if (!couponIsActive(coupon)) {
-            sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон неактивен! Проверьте даты действия!", adminId));
-            throw new RuntimeException("Купон неактивен! Проверьте даты действия!");
-        }
-
-        return coupon;
+        return new Coupon(barcode, barcodeImageByteArray, startDate, endDate, pharmacies, name, text, news);
     }
 
     public boolean couponIsActive(final Coupon coupon) {
+        LocalDateTime zonedDateTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
+        if (coupon.getStartDate() != null && coupon.getEndDate() != null) {
+            return zonedDateTime.isAfter(coupon.getStartDate()) && zonedDateTime.isBefore(coupon.getEndDate());
+        }
+        return false;
+    }
+
+    public boolean couponIsActiveToUse(final Coupon coupon) {
         LocalDateTime zonedDateTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
         if (coupon.getStartDate() == null && coupon.getEndDate() == null) {
             return true;
@@ -190,7 +226,7 @@ public class CouponService {
         return false;
     }
 
-    public void deleteExpiredCouponsAndReset() {
+    public void deleteExpiredCoupons() {
         List<Coupon> coupons = couponRepository.findAll();
 
         LocalDateTime zonedDateTime = LocalDateTime.now(ZoneId.of("Europe/Moscow"));
@@ -200,6 +236,15 @@ public class CouponService {
             userService.saveUser(user);
         }));
         couponRepository.deleteAll(couponsToDelete);
+    }
+
+    @Transactional
+    public void clearUserCityCoupons(final User user) {
+        List<Coupon> couponsToDelete = user.getCoupons().stream().filter(coupon -> !coupon.getBarcode().equals(helloCouponBarcode)).toList();
+        couponsToDelete.forEach(coupon -> {
+            user.getCoupons().remove(coupon);
+            userService.saveUser(user);
+        });
     }
 
     public String getTimeSign() {

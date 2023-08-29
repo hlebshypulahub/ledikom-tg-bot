@@ -10,6 +10,7 @@ import com.ledikom.utils.City;
 import com.ledikom.utils.UserResponseState;
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.*;
+import jakarta.transaction.Transactional;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -163,19 +164,19 @@ public class UserService {
         return findByChatId(chatId).getResponseState() != UserResponseState.NONE;
     }
 
+    @Transactional
     public void setCityToUserAndAddCoupons(final String cityName, final Long chatId) {
         User user = findByChatId(chatId);
         user.setCity(City.valueOf(cityName));
 
-        List<Coupon> activeCouponsForUser = couponService.getAllActiveCouponsToUserByCity(user.getCity());
-        int userCouponsSizeBeforeUpdate = user.getCoupons().size();
-        user.getCoupons().addAll(activeCouponsForUser);
+        List<Coupon> activeCouponsForUser = couponService.findAllActiveCouponsForUserByCity(user.getCity());
 
+        couponService.clearUserCityCoupons(user);
 
+        if (activeCouponsForUser.size() > 0) {
+            user.getCoupons().addAll(activeCouponsForUser);
+            userRepository.save(user);
 
-        userRepository.save(user);
-
-        if (activeCouponsForUser.size() > userCouponsSizeBeforeUpdate) {
             sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAddedNewCoupons(cityName), chatId));
             sendAllCouponsList(user.getChatId());
         } else {
@@ -185,7 +186,7 @@ public class UserService {
 
     public List<User> getAllUsersForCouponCities(final Set<Pharmacy> pharmacies) {
         List<User> users = getAllUsers();
-        return users.stream().filter(user -> pharmacies.stream().map(Pharmacy::getCity).toList().contains(user.getCity())).toList();
+        return users.stream().filter(user -> user.getCity() == null || pharmacies.stream().map(Pharmacy::getCity).toList().contains(user.getCity())).toList();
     }
 
     public void sendNewsToUsers(final NewsFromAdmin newsFromAdmin) throws IOException {

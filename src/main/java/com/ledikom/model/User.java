@@ -7,10 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 @Getter
@@ -43,6 +40,5 @@ public class User {
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "coupon_id")
     )
-    @MapKeyColumn(name = "timestamp")
-    private Map<Coupon, LocalDateTime> coupons = new HashMap<>();
+    private Set<Coupon> coupons = new HashSet<>();
 }

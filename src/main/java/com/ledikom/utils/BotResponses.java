@@ -4,6 +4,8 @@ import com.ledikom.model.Coupon;
 import com.ledikom.model.User;
 import com.ledikom.model.UserCouponRecord;
 
+import java.time.format.DateTimeFormatter;
+
 public final class BotResponses {
 
     public static String startMessage() {
@@ -21,12 +23,26 @@ public final class BotResponses {
                 """;
     }
 
-    public static String couponAcceptMessage(final String text, final int durationInMinutes) {
-        return text + "\n\n\n" + "Купон действует " + durationInMinutes + " минут. Вы уверены что хотите активировать сейчас? Показать на кассe";
-    }
+    public static String couponAcceptMessage(final Coupon coupon, final boolean inAllPharmacies, final int durationInMinutes) {
+        StringBuilder sb = new StringBuilder(coupon.getText() + "\n\n");
 
-    public static String couponUsedOrGloballyExpiredMessage() {
-        return "Coupon used or glb expired!!!!!!!!!!";
+        if (inAllPharmacies) {
+            sb.append("Действует во всех аптках сети.");
+        } else {
+            sb.append("Действует в аптках:\n");
+            coupon.getPharmacies().forEach(pharmacy -> {
+                sb.append(pharmacy.getName()).append(" - ").append(pharmacy.getCity().label).append(", ").append(pharmacy.getAddress()).append("\n");
+            });
+        }
+        sb.append("\n");
+
+        if (coupon.getStartDate() != null && coupon.getEndDate() != null) {
+            sb.append("С ").append(coupon.getStartDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))).append(" по ").append(coupon.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))).append("\n\n");
+        }
+
+        sb.append("Купон действует в течение ").append(durationInMinutes).append(" минут. Активируйте его при кассе.");
+
+        return sb.toString();
     }
 
     public static String referralMessage(final String refLink, final int referralCount) {
@@ -59,10 +75,6 @@ public final class BotResponses {
         return "Времени осталось: " + UtilityHelper.convertIntToTimeInt(timeLeftInSeconds / 60) + ":" + UtilityHelper.convertIntToTimeInt(timeLeftInSeconds % 60) +
                 "\n\n" +
                 userCouponRecord.getText();
-    }
-
-    public static String couponUniqueSign(final String timeSign) {
-        return "Действителен до " + timeSign;
     }
 
     public static String couponButton(final Coupon coupon) {

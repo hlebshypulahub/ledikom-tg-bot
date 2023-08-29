@@ -61,7 +61,12 @@ public class ScheduleService {
 
     @Scheduled(cron = "0 0 0 * * *", zone = "GMT+3")
     public void deleteExpiredCoupons() {
-        couponService.deleteExpiredCouponsAndReset();
+        couponService.deleteExpiredCoupons();
+    }
+
+    @Scheduled(cron = "0 0 8 * * *", zone = "GMT+3")
+    public void addFreshCoupons() {
+        couponService.addFreshCouponsToUsers();
     }
 
     @Scheduled(fixedRate = 1000 * 60)

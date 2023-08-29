@@ -24,9 +24,9 @@ public class PharmacyService {
 
     @PostConstruct
     public void initAndPersistPharmacies() {
-        Pharmacy pharmacy = new Pharmacy(1, "Аптека №1", City.BORISOV, "опен хаврс", "+11111111", "https://gmaps/1");
-        Pharmacy pharmacy2 = new Pharmacy(2, "Аптека №2", City.MINSK, "опен хаврс", "+11111111", "https://gmaps/2");
-        Pharmacy pharmacy3 = new Pharmacy(3, "Аптека №3", City.M_GORKA, "опен хаврс", "+11111111", "https://gmaps/3");
+        Pharmacy pharmacy = new Pharmacy(1, "Аптека №1", City.BORISOV, "ул. Трусова", "опен хаврс", "+11111111", "https://gmaps/1");
+        Pharmacy pharmacy2 = new Pharmacy(2, "Аптека №2", City.MINSK, "ул. Трусова", "опен хаврс", "+11111111", "https://gmaps/2");
+        Pharmacy pharmacy3 = new Pharmacy(3, "Аптека №3", City.M_GORKA, "ул. Трусова", "опен хаврс", "+11111111", "https://gmaps/3");
         pharmacyRepository.saveAll(List.of(pharmacy, pharmacy2, pharmacy3));
     }
 

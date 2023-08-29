@@ -106,11 +106,12 @@ public class BotService {
 
     public void sendCouponAcceptMessageIfNotUsed(final String couponCommand, final long chatId) {
         User user = userService.findByChatId(chatId);
-        Coupon coupon = couponService.findActiveCouponForUser(user, couponCommand);
+        Coupon coupon = couponService.findCouponForUser(user, couponCommand);
+        boolean inAllPharmacies = pharmacyService.findAll().size() == coupon.getPharmacies().size();
 
         SendMessage sm;
-        if (coupon != null && couponService.couponIsActive(coupon)) {
-            sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(coupon.getText(), couponDurationInMinutes), chatId);
+        if (couponService.couponIsActiveToUse(coupon)) {
+            sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(coupon, inAllPharmacies, couponDurationInMinutes), chatId);
             botUtilityService.addCouponButton(sm, coupon, "Активировать", "couponAccept_");
         } else {
             sm = botUtilityService.buildSendMessage(BotResponses.couponIsNotActive(), chatId);
@@ -120,7 +121,7 @@ public class BotService {
 
     public void sendCouponIfNotUsedAndActive(final String couponCommand, final Long chatId) {
         User user = userService.findByChatId(chatId);
-        Coupon coupon = couponService.findActiveCouponForUser(user, couponCommand);
+        Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
         byte[] barcodeImageByteArray = coupon.getBarcodeImageByteArray();
         InputFile barcodeInputFile = new InputFile(new ByteArrayInputStream(barcodeImageByteArray), "barcode.jpg");

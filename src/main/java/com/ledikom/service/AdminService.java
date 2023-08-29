@@ -3,22 +3,16 @@ package com.ledikom.service;
 import com.ledikom.bot.LedikomBot;
 import com.ledikom.callback.GetFileFromBotCallback;
 import com.ledikom.callback.SendMessageCallback;
-import com.ledikom.callback.SendMessageWithPhotoCallback;
-import com.ledikom.model.RequestFromAdmin;
 import com.ledikom.model.NewsFromAdmin;
-import com.ledikom.model.User;
 import com.ledikom.utils.AdminMessageToken;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.polls.Poll;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,22 +49,6 @@ public class AdminService {
     public void initCallbacks() throws IOException {
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
         this.getFileFromBotCallback = ledikomBot.getGetFileFromBotCallback();
-        sendStartupInfoToAdmin();
-    }
-
-    public void sendStartupInfoToAdmin() throws IOException {
-//        sendMessageCallback.execute(botUtilityService.buildSendMessage("Создайте приветсвенный купон перед запуском бота в использование!"
-//                + "\nСкопируйте текст из сообщения ниже, измените название купона и текст и отправьте.", adminId));
-//        sendMessageCallback.execute(botUtilityService.buildSendMessage("""
-//                coupon&
-//                &
-//                &
-//                &
-//                Приветственный купон -5%&
-//                Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!&""", adminId));
-
-        couponService.createAndSendNewCoupon(null, List.of("coupon", helloCouponBarcode, "", "", "Приветственный купон -5%",
-                "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!", ""));
     }
 
     public void processAdminRequest(final Update update) throws IOException {

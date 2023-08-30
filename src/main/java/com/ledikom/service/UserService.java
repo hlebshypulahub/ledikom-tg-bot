@@ -9,8 +9,8 @@ import com.ledikom.utils.BotResponses;
 import com.ledikom.utils.City;
 import com.ledikom.utils.UserResponseState;
 import jakarta.annotation.PostConstruct;
-import jakarta.persistence.*;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -23,7 +23,6 @@ import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Service
@@ -31,6 +30,9 @@ public class UserService {
     private static final int INIT_REFERRAL_COUNT = 0;
     private static final boolean INIT_RECEIVE_NEWS = true;
     private static final UserResponseState INIT_RESPONSE_STATE = UserResponseState.NONE;
+
+    @Value("${bot.username}")
+    private String botUsername;
 
     private final UserRepository userRepository;
     private final CouponService couponService;
@@ -55,13 +57,10 @@ public class UserService {
         this.sendMessageWithPhotoCallback = ledikomBot.getSendMessageWithPhotoCallback();
     }
 
-    public List<User> getAllUsers() {
+    public List<User> findAllUsers() {
         return userRepository.findAll();
     }
 
-    public void saveAll(final List<User> users) {
-        userRepository.saveAll(users);
-    }
 
     public void addNewUser(final Long chatId) {
         User user = new User(chatId, INIT_REFERRAL_COUNT, INIT_RECEIVE_NEWS, INIT_RESPONSE_STATE);
@@ -74,21 +73,8 @@ public class UserService {
     }
 
     public User findByChatId(final Long chatId) {
-        return userRepository.findByChatId(chatId).orElseThrow(() -> new RuntimeException("User not found"));
+        return userRepository.findByChatId(chatId).orElseThrow(() -> new RuntimeException("User not found with id " + chatId));
     }
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-    private String question;
-    @ElementCollection
-    @CollectionTable(name = "poll_option", joinColumns = @JoinColumn(name = "poll_id"))
-    private List<PollOption> options;
-    private Integer totalVoterCount;
-    private String type;
-    private Boolean allowMultipleAnswers;
-    private Integer correctOptionId;
-    private String explanation;
 
     public void processPoll(final Poll telegramPoll) {
         // check if not a re-vote
@@ -117,13 +103,12 @@ public class UserService {
             sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.noteAdded(), chatId));
         } else {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Нет такой команды!", chatId));
-            throw new RuntimeException("Нет такой команды: " + text);
+            throw new RuntimeException("Invalid user response state: " + user.getResponseState());
         }
     }
 
     public void markCouponAsUsedForUser(final User user, final Coupon coupon) {
-        if (coupon != null) {
-            user.getCoupons().remove(coupon);
+        if (user.getCoupons().remove(coupon)) {
             userRepository.save(user);
         }
     }
@@ -131,7 +116,7 @@ public class UserService {
     public void addNewRefUser(final long chatIdFromRefLink, final long chatId) {
         final boolean selfLinkOrUserExists = chatIdFromRefLink == chatId || userExistsByChatId(chatId);
         if (!selfLinkOrUserExists) {
-            User user = userRepository.findByChatId(chatIdFromRefLink).orElseThrow(() -> new RuntimeException("User not found"));
+            User user = findByChatId(chatIdFromRefLink);
             user.setReferralCount(user.getReferralCount() + 1);
             userRepository.save(user);
         }
@@ -139,10 +124,6 @@ public class UserService {
 
     public boolean userExistsByChatId(final long chatId) {
         return userRepository.findByChatId(chatId).isPresent();
-    }
-
-    public List<User> getAllUsersToReceiveNews() {
-        return userRepository.findAll().stream().filter(User::getReceiveNews).collect(Collectors.toList());
     }
 
     public List<SendMessage> processNoteRequestAndBuildSendMessageList(final long chatId) {
@@ -169,7 +150,7 @@ public class UserService {
         User user = findByChatId(chatId);
         user.setCity(City.valueOf(cityName));
 
-        List<Coupon> activeCouponsForUser = couponService.findAllActiveCouponsForUserByCity(user.getCity());
+        List<Coupon> activeCouponsForUser = couponService.findAllTempActiveCouponsForUserByCity(user.getCity());
 
         couponService.clearUserCityCoupons(user);
 
@@ -177,20 +158,27 @@ public class UserService {
             user.getCoupons().addAll(activeCouponsForUser);
             userRepository.save(user);
 
-            sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAddedNewCoupons(cityName), chatId));
+            sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAddedAndNewCouponsGot(cityName), chatId));
             sendAllCouponsList(user.getChatId());
         } else {
             sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAdded(cityName), chatId));
         }
     }
 
-    public List<User> getAllUsersForCouponCities(final Set<Pharmacy> pharmacies) {
-        List<User> users = getAllUsers();
-        return users.stream().filter(user -> user.getCity() == null || pharmacies.stream().map(Pharmacy::getCity).toList().contains(user.getCity())).toList();
+    public List<User> findAllUsersToSendNews() {
+        return findAllUsers().stream().filter(User::getReceiveNews).toList();
+    }
+
+    public List<User> filterUsersToSendNews(final List<User> users) {
+        return users.stream().filter(User::getReceiveNews).toList();
+    }
+
+    public List<User> findAllUsersToAddCouponByPharmacies(final Set<Pharmacy> pharmacies) {
+        return findAllUsers().stream().filter(user -> user.getCity() == null || pharmacies.stream().map(Pharmacy::getCity).toList().contains(user.getCity())).toList();
     }
 
     public void sendNewsToUsers(final NewsFromAdmin newsFromAdmin) throws IOException {
-        List<User> usersToSendNews = getAllUsersToReceiveNews();
+        List<User> usersToSendNews = findAllUsersToSendNews();
 
         if (newsFromAdmin.getPhotoPath() == null) {
             usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendMessage(newsFromAdmin.getNews(), user.getChatId())));
@@ -216,7 +204,19 @@ public class UserService {
     }
 
     public void sendPollToUsers(final Poll poll) {
-        List<User> usersToSendNews = getAllUsersToReceiveNews();
+        List<User> usersToSendNews = findAllUsersToSendNews();
         usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendPoll(poll, user.getChatId())));
+    }
+
+    public void sendReferralLinkForUser(final Long chatId) {
+        String refLink = "https://t.me/" + botUsername + "?start=" + chatId;
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.referralMessage(refLink, findByChatId(chatId).getReferralCount()), chatId));
+    }
+
+    public void sendTriggerReceiveNewsMessage(final Long chatId) {
+        User user = findByChatId(chatId);
+        user.setReceiveNews(!user.getReceiveNews());
+        saveUser(user);
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.triggerReceiveNewsMessage(user), chatId));
     }
 }

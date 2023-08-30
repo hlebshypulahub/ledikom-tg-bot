@@ -5,6 +5,7 @@ import com.ledikom.callback.GetFileFromBotCallback;
 import com.ledikom.callback.SendMessageCallback;
 import com.ledikom.model.NewsFromAdmin;
 import com.ledikom.utils.AdminMessageToken;
+import com.ledikom.utils.BotCommands;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Service
 public class AdminService {
@@ -46,7 +48,7 @@ public class AdminService {
     }
 
     @PostConstruct
-    public void initCallbacks() throws IOException {
+    public void initCallbacks() {
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
         this.getFileFromBotCallback = ledikomBot.getGetFileFromBotCallback();
     }
@@ -68,42 +70,49 @@ public class AdminService {
 
     public void executeAdminActionOnMessageReceived(final Message message) throws IOException {
         String photoPath = null;
-        String text = null;
-
-        if (message.hasPhoto() || message.hasDocument()) {
+        if (botUtilityService.messageHasPhoto(message)) {
             photoPath = botUtilityService.getPhotoFromUpdate(message, getFileFromBotCallback);
-            text = message.getCaption();
-        }
-        if (message.hasText()) {
-            text = message.getText();
         }
 
-        List<String> splitStringsFromAdminMessage = getSplitStrings(text);
+        String text = getTextFromAdminMessage(message);
+
+        List<String> splitStringsFromAdminMessage = getSplitStringsFromAdminMessage(text);
 
         if (splitStringsFromAdminMessage.get(0).equalsIgnoreCase(AdminMessageToken.NEWS.label)) {
-            if (splitStringsFromAdminMessage.size() != AdminMessageToken.NEWS.commandSize) {
-                sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат новости! Количество аргументов не равно " + AdminMessageToken.NEWS.commandSize, adminId));
-                throw new RuntimeException("Неверный формат новости! Количество аргументов не равно " + AdminMessageToken.NEWS.commandSize);
+            if (adminCommandIsValid(AdminMessageToken.NEWS, splitStringsFromAdminMessage.size())) {
+                userService.sendNewsToUsers(getNewsByAdmin(splitStringsFromAdminMessage, photoPath));
             }
-            userService.sendNewsToUsers(getNewsByAdmin(splitStringsFromAdminMessage, photoPath));
         } else if (splitStringsFromAdminMessage.get(0).equalsIgnoreCase(AdminMessageToken.COUPON.label)) {
-            if (splitStringsFromAdminMessage.size() != AdminMessageToken.COUPON.commandSize) {
-                sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат новости! Количество аргументов не равно " + AdminMessageToken.COUPON.commandSize, adminId));
-                throw new RuntimeException("Неверный формат новости! Количество аргументов не равно " + AdminMessageToken.COUPON.commandSize);
+            if (adminCommandIsValid(AdminMessageToken.COUPON, splitStringsFromAdminMessage.size())) {
+                couponService.createAndSendNewCoupon(photoPath, splitStringsFromAdminMessage);
             }
-            couponService.createAndSendNewCoupon(photoPath, splitStringsFromAdminMessage);
         }
     }
 
-    private List<String> getSplitStrings(final String messageFromAdmin) {
-        if (messageFromAdmin == null || messageFromAdmin.isBlank()) {
+    private boolean adminCommandIsValid(final AdminMessageToken adminMessageToken, final int splitStringsSize) {
+        if (splitStringsSize == adminMessageToken.commandSize) {
+            return true;
+        } else {
+            sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Количество аргументов не равно " + adminMessageToken.commandSize, adminId));
+            throw new RuntimeException("Неверный формат команды! Количество аргументов не равно " + AdminMessageToken.COUPON.commandSize + ", команда вызова: " + adminMessageToken.label);
+        }
+    }
+
+    private String getTextFromAdminMessage(final Message message) {
+        if (botUtilityService.messageHasPhoto(message) && !message.getCaption().isBlank()) {
+            return message.getCaption();
+        } else if (message.hasText() && !message.getText().isBlank()) {
+            return message.getText();
+        } else {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Сообщение не может быть пустым!", adminId));
             throw new RuntimeException("Неверный формат команды! Сообщение не может быть пустым!");
         }
+    }
 
+    private List<String> getSplitStringsFromAdminMessage(final String messageFromAdmin) {
         List<String> splitStringsFromAdminMessage = new ArrayList<>(Arrays.stream(messageFromAdmin.split(DELIMITER)).map(String::trim).toList());
 
-        if (splitStringsFromAdminMessage.isEmpty()) {
+        if (splitStringsFromAdminMessage.size() == 1 && Stream.of(BotCommands.values()).noneMatch(botCommand -> botCommand.label.equals(splitStringsFromAdminMessage.get(0)))) {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER, adminId));
             throw new RuntimeException("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER);
         }

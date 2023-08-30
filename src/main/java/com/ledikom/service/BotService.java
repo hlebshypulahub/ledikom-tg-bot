@@ -95,7 +95,7 @@ public class BotService {
         if (!userService.userExistsByChatId(chatId)) {
             userService.addNewUser(chatId);
             var sm = botUtilityService.buildSendMessage(BotResponses.startMessage(), chatId);
-            botUtilityService.addCouponButton(sm, couponService.getHelloCoupon(), "Активировать приветственный купон", "couponPreview_");
+            botUtilityService.addPreviewCouponButton(sm, couponService.getHelloCoupon(), "Активировать приветственный купон");
             sendMessageCallback.execute(sm);
 
             sm = botUtilityService.buildSendMessage(BotResponses.chooseYourCity(), chatId);
@@ -104,22 +104,22 @@ public class BotService {
         }
     }
 
-    public void sendCouponAcceptMessageIfNotUsed(final String couponCommand, final long chatId) {
+    public void sendCouponAcceptMessage(final String couponCommand, final long chatId) {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
-        boolean inAllPharmacies = pharmacyService.findAll().size() == coupon.getPharmacies().size();
 
         SendMessage sm;
-        if (couponService.couponIsActiveToUse(coupon)) {
+        if (couponService.couponCanBeUsedNow(coupon)) {
+            boolean inAllPharmacies = pharmacyService.findAll().size() == coupon.getPharmacies().size();
             sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(coupon, inAllPharmacies, couponDurationInMinutes), chatId);
-            botUtilityService.addCouponButton(sm, coupon, "Активировать", "couponAccept_");
+            botUtilityService.addAcceptCouponButton(sm, coupon, "Активировать");
         } else {
             sm = botUtilityService.buildSendMessage(BotResponses.couponIsNotActive(), chatId);
         }
         sendMessageCallback.execute(sm);
     }
 
-    public void sendCouponIfNotUsedAndActive(final String couponCommand, final Long chatId) {
+    public void sendActivatedCouponIfCanBeUsed(final String couponCommand, final Long chatId) {
         User user = userService.findByChatId(chatId);
         Coupon coupon = couponService.findCouponForUser(user, couponCommand);
 
@@ -131,18 +131,6 @@ public class BotService {
         MessageIdInChat messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
         couponService.addCouponToMap(messageIdInChat, couponTextWithBarcodeAndTimeSign);
         userService.markCouponAsUsedForUser(user, coupon);
-    }
-
-    public void sendReferralLinkForUser(final Long chatId) {
-        String refLink = "https://t.me/" + botUsername + "?start=" + chatId;
-        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.referralMessage(refLink, userService.findByChatId(chatId).getReferralCount()), chatId));
-    }
-
-    public void sendTriggerReceiveNewsMessage(final Long chatId) {
-        User user = userService.findByChatId(chatId);
-        user.setReceiveNews(!user.getReceiveNews());
-        userService.saveUser(user);
-        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.triggerReceiveNewsMessage(user), chatId));
     }
 
     public void sendNoteAndSetUserResponseState(final long chatId) {

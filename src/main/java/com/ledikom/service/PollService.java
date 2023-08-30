@@ -35,7 +35,7 @@ public class PollService {
     }
 
     public Poll findByQuestion(final String question) {
-        return pollRepository.findByQuestion(question).orElseThrow(() -> new RuntimeException("Poll not found"));
+        return pollRepository.findByQuestion(question).orElseThrow(() -> new RuntimeException("Poll not found by question " + question));
     }
 
     private List<Poll> getActualPolls() {
@@ -45,11 +45,12 @@ public class PollService {
     public String getPollsInfoForAdmin() {
         List<com.ledikom.model.Poll> polls = getActualPolls();
 
+        StringBuilder sb = new StringBuilder("Информация об опросах за последние " + activeTimeInDays + " дней:\n\n\n");
+
         if (polls.isEmpty()) {
-            return "Информация об опросах за последние " + activeTimeInDays + " дней:\n\n\n" + "Список пуст.";
+            return sb.append("Список пуст").toString();
         }
 
-        StringBuilder sb = new StringBuilder("Информация об опросах за последние " + activeTimeInDays + " дней:\n\n\n");
         IntStream.range(0, polls.size())
                 .forEach(index -> {
                     Poll poll = polls.get(index);

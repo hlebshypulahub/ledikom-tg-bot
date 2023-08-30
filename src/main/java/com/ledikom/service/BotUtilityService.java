@@ -51,6 +51,10 @@ public class BotUtilityService {
         return null;
     }
 
+    public boolean messageHasPhoto(final Message message) {
+        return message.hasPhoto() || message.hasDocument();
+    }
+
     public SendMessage buildSendMessage(String text, long chatId) {
         return SendMessage.builder()
                 .chatId(chatId)
@@ -88,6 +92,32 @@ public class BotUtilityService {
                 cities.stream().map(Enum::name).collect(Collectors.toList()));
     }
 
+    public void addAcceptCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText) {
+        addCouponButton(sm, coupon, buttonText, "couponAccept_");
+    }
+
+    public void addPreviewCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText) {
+        addCouponButton(sm, coupon, buttonText, "couponPreview_");
+    }
+
+    public InlineKeyboardMarkup createListOfCoupons(final Set<Coupon> coupons) {
+        var markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+
+        for (Coupon coupon : coupons) {
+            var button = new InlineKeyboardButton();
+            button.setText(BotResponses.couponButton(coupon));
+            button.setCallbackData("couponPreview_" + coupon.getId());
+            List<InlineKeyboardButton> row = new ArrayList<>();
+            row.add(button);
+            keyboard.add(row);
+        }
+
+        markup.setKeyboard(keyboard);
+
+        return markup;
+    }
+
     private void addButtonsToMessage(final SendMessage sm, final int buttonsInRow, final List<String> buttonTextList, final List<String> callbackDataList) {
         var markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
@@ -108,7 +138,7 @@ public class BotUtilityService {
         sm.setReplyMarkup(markup);
     }
 
-    public void addCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText, final String callbackData) {
+    private void addCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText, final String callbackData) {
         var markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
         var button = new InlineKeyboardButton();
@@ -119,23 +149,5 @@ public class BotUtilityService {
         keyboard.add(row);
         markup.setKeyboard(keyboard);
         sm.setReplyMarkup(markup);
-    }
-
-    public InlineKeyboardMarkup createListOfCoupons(final Set<Coupon> coupons) {
-        var markup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
-
-        for (Coupon coupon : coupons) {
-            var button = new InlineKeyboardButton();
-            button.setText(BotResponses.couponButton(coupon));
-            button.setCallbackData("couponPreview_" + coupon.getId());
-            List<InlineKeyboardButton> row = new ArrayList<>();
-            row.add(button);
-            keyboard.add(row);
-        }
-
-        markup.setKeyboard(keyboard);
-
-        return markup;
     }
 }

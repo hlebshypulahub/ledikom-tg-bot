@@ -66,7 +66,7 @@ public class ScheduleService {
 
     @Scheduled(cron = "0 0 8 * * *", zone = "GMT+3")
     public void addFreshCoupons() {
-        couponService.addFreshCouponsToUsers();
+        couponService.addCouponsToUsersOnFirstActiveDay();
     }
 
     @Scheduled(fixedRate = 1000 * 60)

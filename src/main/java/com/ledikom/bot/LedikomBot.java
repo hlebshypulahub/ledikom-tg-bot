@@ -5,6 +5,7 @@ import com.ledikom.model.MessageIdInChat;
 import com.ledikom.service.AdminService;
 import com.ledikom.service.BotService;
 import com.ledikom.service.UserService;
+import com.ledikom.utils.BotCommands;
 import com.ledikom.utils.City;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -16,7 +17,6 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethodMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption;
@@ -59,26 +59,26 @@ public class LedikomBot extends TelegramLongPollingBot {
     @PostConstruct
     public void fillActionsMap() {
         commandWithChatIdActions.put(cmd -> cmd.startsWith("couponPreview_"),
-                this.botService::sendCouponAcceptMessageIfNotUsed);
+                this.botService::sendCouponAcceptMessage);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("couponAccept_"),
-                this.botService::sendCouponIfNotUsedAndActive);
-        commandWithChatIdActions.put(cmd -> cmd.startsWith("/start"),
+                this.botService::sendActivatedCouponIfCanBeUsed);
+        commandWithChatIdActions.put(cmd -> cmd.startsWith(BotCommands.START.label),
                 this.botService::processStartOrRefLinkFollow);
         commandWithChatIdActions.put(cmd -> cmd.startsWith("music_"),
                 this.botService::processMusicRequest);
         commandWithChatIdActions.put(cmd -> Arrays.stream(City.values()).map(Enum::name).toList().contains(cmd),
                 this.userService::setCityToUserAndAddCoupons);
-        chatIdActions.put(cmd -> cmd.equals("/kupony"),
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.COUPONS.label),
                 this.userService::sendAllCouponsList);
-        chatIdActions.put(cmd -> cmd.equals("/moya_ssylka"),
-                this.botService::sendReferralLinkForUser);
-        chatIdActions.put(cmd -> cmd.equals("/vkl_otkl_rassylku"),
-                this.botService::sendTriggerReceiveNewsMessage);
-        chatIdActions.put(cmd -> cmd.equals("/zametki"),
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.REF_LINK.label),
+                this.userService::sendReferralLinkForUser);
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.REF_LINK.label),
+                this.userService::sendTriggerReceiveNewsMessage);
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.NOTES.label),
                 this.botService::sendNoteAndSetUserResponseState);
-        chatIdActions.put(cmd -> cmd.equals("/muzyka_dla_sna"),
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.MUSIC.label),
                 this.botService::sendMusicMenu);
-        chatIdActions.put(cmd -> cmd.equals("/moy_gorod"),
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.CITY.label),
                 this.botService::sendCityMenu);
     }
 
@@ -157,10 +157,6 @@ public class LedikomBot extends TelegramLongPollingBot {
         return this::getFileFromBot;
     }
 
-    public SendCouponCallback getSendCouponCallback() {
-        return this::sendCoupon;
-    }
-
     public SendMessageCallback getSendMessageCallback() {
         return this::sendMessage;
     }
@@ -216,16 +212,6 @@ public class LedikomBot extends TelegramLongPollingBot {
             }
         } catch (Exception e) {
             log.trace(e.getMessage());
-        }
-    }
-
-    private MessageIdInChat sendCoupon(SendMessage sm) {
-        try {
-            Message sentMessage = execute(sm);
-            return new MessageIdInChat(sentMessage.getChatId(), sentMessage.getMessageId());
-        } catch (Exception e) {
-            log.trace(e.getMessage());
-            return null;
         }
     }
 

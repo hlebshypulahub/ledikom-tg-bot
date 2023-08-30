@@ -128,7 +128,7 @@ public final class BotResponses {
                 ": " + city.label + ".\n\nМожете изменить в меню ниже.");
     }
 
-    public static String cityAddedNewCoupons(final String cityName) {
+    public static String cityAddedAndNewCouponsGot(final String cityName) {
         return "Вы выбрали: " + City.valueOf(cityName).label + "\n\nПроверьте и воспользуйтесь вашими новыми купонами!";
     }
 }

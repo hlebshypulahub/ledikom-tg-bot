@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -27,6 +28,7 @@ public class User {
     private UserResponseState responseState;
     private String note;
     private City city;
+    private LocalDateTime specialDate;
 
     public User(final Long chatId, final Integer referralCount, final Boolean receiveNews, final UserResponseState responseState) {
         this.chatId = chatId;

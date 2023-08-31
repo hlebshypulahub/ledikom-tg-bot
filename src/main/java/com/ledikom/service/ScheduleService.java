@@ -69,6 +69,11 @@ public class ScheduleService {
         couponService.addCouponsToUsersOnFirstActiveDay();
     }
 
+    @Scheduled(cron = "0 15 8 * * *", zone = "GMT+3")
+    public void addDateCoupons() {
+        couponService.addDateCouponToUsers();
+    }
+
     @Scheduled(fixedRate = 1000 * 60)
     public void processMessagesToDeleteInMap() {
         LocalDateTime checkpointTimestamp = LocalDateTime.now().plusSeconds(DELETION_EPSILON_SECONDS);

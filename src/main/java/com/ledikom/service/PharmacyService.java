@@ -7,6 +7,8 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -40,5 +42,19 @@ public class PharmacyService {
 
     public List<Pharmacy> findAll() {
         return pharmacyRepository.findAll();
+    }
+
+    // TODO: validation
+    public List<Pharmacy> getPharmaciesFromIdsString(final String ids) {
+        List<Pharmacy> pharmacies = new ArrayList<>();
+        if (ids.isBlank()) {
+            pharmacies.addAll(findAll());
+        } else {
+            List<String> pharmacyIds = Arrays.stream(ids.split(",")).map(String::trim).toList();
+            for (String id : pharmacyIds) {
+                pharmacies.add(findById(Long.parseLong(id)));
+            }
+        }
+        return pharmacies;
     }
 }

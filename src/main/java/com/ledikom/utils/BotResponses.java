@@ -1,10 +1,10 @@
 package com.ledikom.utils;
 
-import com.ledikom.model.Coupon;
-import com.ledikom.model.User;
-import com.ledikom.model.UserCouponRecord;
+import com.ledikom.model.*;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 public final class BotResponses {
 
@@ -26,14 +26,7 @@ public final class BotResponses {
     public static String couponAcceptMessage(final Coupon coupon, final boolean inAllPharmacies, final int durationInMinutes) {
         StringBuilder sb = new StringBuilder(coupon.getText() + "\n\n");
 
-        if (inAllPharmacies) {
-            sb.append("Действует во всех аптках сети.");
-        } else {
-            sb.append("Действует в аптках:\n");
-            coupon.getPharmacies().forEach(pharmacy -> {
-                sb.append(pharmacy.getName()).append(" - ").append(pharmacy.getCity().label).append(", ").append(pharmacy.getAddress()).append("\n");
-            });
-        }
+        appendPharmacies(sb, coupon.getPharmacies().stream().toList(), inAllPharmacies);
         sb.append("\n");
 
         if (coupon.getStartDate() != null && coupon.getEndDate() != null) {
@@ -130,5 +123,39 @@ public final class BotResponses {
 
     public static String cityAddedAndNewCouponsGot(final String cityName) {
         return "Вы выбрали: " + City.valueOf(cityName).label + "\n\nПроверьте и воспользуйтесь вашими новыми купонами!";
+    }
+
+    public static String promotionAccepted() {
+        return "Спасибо, что согласились поучаствовать в нашей акции!\n\nПоспешите - количество ограниченно!";
+    }
+
+    public static String promotionText(final PromotionFromAdmin promotionFromAdmin, final boolean inAllPharmacies) {
+        StringBuilder sb = new StringBuilder(promotionFromAdmin.getText()).append("\n\n");
+        appendPharmacies(sb, promotionFromAdmin.getPharmacies(), inAllPharmacies);
+        sb.append("\n");
+        return sb.toString();
+    }
+
+    private static void appendPharmacies(final StringBuilder sb, final List<Pharmacy> pharmacies, final boolean inAllPharmacies) {
+        if (inAllPharmacies) {
+            sb.append("Действует во всех аптках сети.");
+        } else {
+            sb.append("Действует в аптках:\n");
+            pharmacies.forEach(pharmacy -> {
+                sb.append(pharmacy.getName()).append(" - ").append(pharmacy.getCity().label).append(", ").append(pharmacy.getAddress()).append("\n");
+            });
+        }
+    }
+
+    public static String addSpecialDate() {
+        return "Укажите специальную дату и получишь подарок!\n\nВведите и отправьте сообщение в следующем цифровом формате:\n\nдень.месяц";
+    }
+
+    public static String yourSpecialDate(final LocalDateTime specialDate) {
+        return "Ваша особенная дата: " + specialDate.format(DateTimeFormatter.ofPattern("dd.MM")) + "\n\n" + "В эту дату вас ждет подарок от нашей сети!";
+    }
+
+    public static String specialDay() {
+        return "Поздр с особенным днем!";
     }
 }

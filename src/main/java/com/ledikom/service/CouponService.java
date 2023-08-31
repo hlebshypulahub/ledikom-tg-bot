@@ -7,7 +7,6 @@ import com.ledikom.model.*;
 import com.ledikom.repository.CouponRepository;
 import com.ledikom.utils.BotResponses;
 import com.ledikom.utils.City;
-import com.ledikom.utils.UtilityHelper;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,6 +29,8 @@ public class CouponService {
 
     @Value("${hello-coupon.barcode}")
     private String helloCouponBarcode;
+    @Value("${date-coupon.barcode}")
+    private String dateCouponBarcode;
     @Value("${coupon.duration-minutes}")
     private int couponDurationInMinutes;
     @Value("${admin.id}")
@@ -61,10 +62,16 @@ public class CouponService {
         saveStaleCoupons();
     }
 
-    private void saveStaleCoupons() throws IOException {
+    private void saveStaleCoupons() {
         if (couponRepository.findByBarcode(helloCouponBarcode).isEmpty()) {
-            createAndSendNewCoupon(null, List.of("coupon", helloCouponBarcode, "", "", "Приветственный купон -5%",
+            Coupon coupon = getNewValidCoupon(List.of("coupon", helloCouponBarcode, "", "", "Приветственный купон -5%",
                     "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!", ""));
+            couponRepository.save(coupon);
+        }
+        if (couponRepository.findByBarcode(dateCouponBarcode).isEmpty()) {
+            Coupon coupon = getNewValidCoupon(List.of("coupon", dateCouponBarcode, "", "", "Особенная дата",
+                    "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!", ""));
+            couponRepository.save(coupon);
         }
     }
 
@@ -106,7 +113,7 @@ public class CouponService {
         couponRepository.save(coupon);
 
         if (couponIsTempAndActive(coupon)) {
-            List<User> usersForCouponCities = userService.findAllUsersToAddCouponByPharmacies(coupon.getPharmacies());
+            List<User> usersForCouponCities = userService.findAllUsersByPharmaciesCities(coupon.getPharmacies());
             usersForCouponCities.forEach(user -> addCouponToUser(coupon, user));
 
             sendCouponNewsToUsers(coupon, userService.filterUsersToSendNews(usersForCouponCities), photoPath);
@@ -134,6 +141,23 @@ public class CouponService {
             botUtilityService.addPreviewCouponButton(sm, coupon, "Активировать купон");
             sendMessageCallback.execute(sm);
         });
+    }
+
+    public void addDateCouponToUsers() {
+        Coupon coupon = couponRepository.findByBarcode(dateCouponBarcode).orElseThrow(() -> new RuntimeException("Date coupon not exist by barcode " + dateCouponBarcode));
+
+        userService.findAllUsers().stream()
+                .filter(user ->
+                        user.getSpecialDate() != null
+                                && user.getSpecialDate().getDayOfMonth() == getZonedDateTimeNow().getDayOfMonth()
+                                && user.getSpecialDate().getMonth() == getZonedDateTimeNow().getMonth())
+                .toList()
+                .forEach(user -> {
+                    addCouponToUser(coupon, user);
+                    var sm = botUtilityService.buildSendMessage(BotResponses.specialDay(), user.getChatId());
+                    botUtilityService.addPreviewCouponButton(sm, coupon, "Активировать");
+                    sendMessageCallback.execute(sm);
+                });
     }
 
     public void addCouponsToUsersOnFirstActiveDay() {
@@ -192,7 +216,7 @@ public class CouponService {
         String datesArgument = splitStringsFromAdminMessage.get(2);
         LocalDateTime startDate, endDate;
         if (datesArgument.isBlank()) {
-            if (barcode.equals(helloCouponBarcode)) {
+            if (barcode.equals(helloCouponBarcode) || barcode.equals(dateCouponBarcode)) {
                 startDate = null;
                 endDate = null;
             } else {
@@ -213,16 +237,7 @@ public class CouponService {
                     23, 59);
         }
 
-        List<Pharmacy> pharmacies = new ArrayList<>();
-        String pharmaciesArgument = splitStringsFromAdminMessage.get(3);
-        if (pharmaciesArgument.isBlank()) {
-            pharmacies.addAll(pharmacyService.findAll());
-        } else {
-            String[] pharmacyIds = pharmaciesArgument.split(",");
-            for (String id : pharmacyIds) {
-                pharmacies.add(pharmacyService.findById(Long.parseLong(id)));
-            }
-        }
+        List<Pharmacy> pharmacies = pharmacyService.getPharmaciesFromIdsString(splitStringsFromAdminMessage.get(3));
 
         String name = splitStringsFromAdminMessage.get(4);
         String text = splitStringsFromAdminMessage.get(5);

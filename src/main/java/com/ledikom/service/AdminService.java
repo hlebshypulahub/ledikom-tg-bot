@@ -4,6 +4,8 @@ import com.ledikom.bot.LedikomBot;
 import com.ledikom.callback.GetFileFromBotCallback;
 import com.ledikom.callback.SendMessageCallback;
 import com.ledikom.model.NewsFromAdmin;
+import com.ledikom.model.Pharmacy;
+import com.ledikom.model.PromotionFromAdmin;
 import com.ledikom.utils.AdminMessageToken;
 import com.ledikom.utils.BotCommands;
 import jakarta.annotation.PostConstruct;
@@ -35,16 +37,18 @@ public class AdminService {
     private final UserService userService;
     private final LedikomBot ledikomBot;
     private final CouponService couponService;
+    private final PharmacyService pharmacyService;
 
     private SendMessageCallback sendMessageCallback;
     private GetFileFromBotCallback getFileFromBotCallback;
 
-    public AdminService(final BotUtilityService botUtilityService, final PollService pollService, final UserService userService, final LedikomBot ledikomBot, final CouponService couponService) {
+    public AdminService(final BotUtilityService botUtilityService, final PollService pollService, final UserService userService, final LedikomBot ledikomBot, final CouponService couponService, final PharmacyService pharmacyService) {
         this.botUtilityService = botUtilityService;
         this.pollService = pollService;
         this.userService = userService;
         this.ledikomBot = ledikomBot;
         this.couponService = couponService;
+        this.pharmacyService = pharmacyService;
     }
 
     @PostConstruct
@@ -82,6 +86,10 @@ public class AdminService {
             if (adminCommandIsValid(AdminMessageToken.NEWS, splitStringsFromAdminMessage.size())) {
                 userService.sendNewsToUsers(getNewsByAdmin(splitStringsFromAdminMessage, photoPath));
             }
+        } else if (splitStringsFromAdminMessage.get(0).equalsIgnoreCase(AdminMessageToken.PROMOTION.label)) {
+            if (adminCommandIsValid(AdminMessageToken.PROMOTION, splitStringsFromAdminMessage.size())) {
+                userService.sendPromotionToUsers(getPromotionFromAdmin(splitStringsFromAdminMessage, photoPath));
+            }
         } else if (splitStringsFromAdminMessage.get(0).equalsIgnoreCase(AdminMessageToken.COUPON.label)) {
             if (adminCommandIsValid(AdminMessageToken.COUPON, splitStringsFromAdminMessage.size())) {
                 couponService.createAndSendNewCoupon(photoPath, splitStringsFromAdminMessage);
@@ -112,7 +120,7 @@ public class AdminService {
     private List<String> getSplitStringsFromAdminMessage(final String messageFromAdmin) {
         List<String> splitStringsFromAdminMessage = new ArrayList<>(Arrays.stream(messageFromAdmin.split(DELIMITER)).map(String::trim).toList());
 
-        if (splitStringsFromAdminMessage.size() == 1 && Stream.of(BotCommands.values()).noneMatch(botCommand -> botCommand.label.equals(splitStringsFromAdminMessage.get(0)))) {
+        if (splitStringsFromAdminMessage.size() == 1 && Stream.of(BotCommands.values()).noneMatch(botCommand -> splitStringsFromAdminMessage.get(0).startsWith(botCommand.label))) {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER, adminId));
             throw new RuntimeException("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER);
         }
@@ -122,5 +130,10 @@ public class AdminService {
 
     private NewsFromAdmin getNewsByAdmin(final List<String> splitStringsFromAdminMessage, final String photoPath) {
         return new NewsFromAdmin(splitStringsFromAdminMessage.get(1), photoPath);
+    }
+
+    private PromotionFromAdmin getPromotionFromAdmin(final List<String> splitStringsFromAdminMessage, final String photoPath) {
+        List<Pharmacy> pharmacies = pharmacyService.getPharmaciesFromIdsString(splitStringsFromAdminMessage.get(1));
+        return new PromotionFromAdmin(pharmacies, splitStringsFromAdminMessage.get(2), photoPath);
     }
 }

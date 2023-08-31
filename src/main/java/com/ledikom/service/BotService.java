@@ -133,15 +133,14 @@ public class BotService {
         userService.markCouponAsUsedForUser(user, coupon);
     }
 
-    public void sendNoteAndSetUserResponseState(final long chatId) {
-        List<SendMessage> sendMessageList = userService.processNoteRequestAndBuildSendMessageList(chatId);
-        sendMessageList.forEach(sm -> sendMessageCallback.execute(sm));
-    }
-
     public void sendCityMenu(final long chatId) {
         User user = userService.findByChatId(chatId);
         var sm = botUtilityService.buildSendMessage(BotResponses.yourCityCanUpdate(user.getCity()), chatId);
         pharmacyService.addCitiesButtons(sm);
         sendMessageCallback.execute(sm);
+    }
+
+    public void sendPromotionAcceptedMessage(final long chatId) {
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.promotionAccepted(), chatId));
     }
 }

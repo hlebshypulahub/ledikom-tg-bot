@@ -93,11 +93,15 @@ public class BotUtilityService {
     }
 
     public void addAcceptCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText) {
-        addCouponButton(sm, coupon, buttonText, "couponAccept_");
+        addButtonToMessage(sm, buttonText, "couponAccept_" + coupon.getId());
     }
 
     public void addPreviewCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText) {
-        addCouponButton(sm, coupon, buttonText, "couponPreview_");
+        addButtonToMessage(sm, buttonText, "couponPreview_" + coupon.getId());
+    }
+
+    public void addPromotionAcceptButton(final SendMessage sm) {
+        addButtonToMessage(sm, "Участвовать", "promotionAccept");
     }
 
     public InlineKeyboardMarkup createListOfCoupons(final Set<Coupon> coupons) {
@@ -138,12 +142,12 @@ public class BotUtilityService {
         sm.setReplyMarkup(markup);
     }
 
-    private void addCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText, final String callbackData) {
+    private void addButtonToMessage(final SendMessage sm, final String buttonText, final String callbackData) {
         var markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
         var button = new InlineKeyboardButton();
         button.setText(buttonText);
-        button.setCallbackData(callbackData + coupon.getId());
+        button.setCallbackData(callbackData);
         List<InlineKeyboardButton> row = new ArrayList<>();
         row.add(button);
         keyboard.add(row);

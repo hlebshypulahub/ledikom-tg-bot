@@ -75,11 +75,15 @@ public class LedikomBot extends TelegramLongPollingBot {
         chatIdActions.put(cmd -> cmd.equals(BotCommands.REF_LINK.label),
                 this.userService::sendTriggerReceiveNewsMessage);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.NOTES.label),
-                this.botService::sendNoteAndSetUserResponseState);
+                this.userService::sendNoteAndSetUserResponseState);
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.DATE.label),
+                this.userService::sendDateAndSetUserResponseState);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.MUSIC.label),
                 this.botService::sendMusicMenu);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.CITY.label),
                 this.botService::sendCityMenu);
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.PROMOTION_ACCEPT.label),
+                this.botService::sendPromotionAcceptedMessage);
     }
 
     @Override

@@ -2,5 +2,6 @@ package com.ledikom.utils;
 
 public enum UserResponseState {
     NONE,
-    SENDING_NOTE
+    SENDING_NOTE,
+    SENDING_DATE
 }

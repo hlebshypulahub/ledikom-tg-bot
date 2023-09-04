@@ -10,6 +10,8 @@ import com.ledikom.utils.City;
 import com.ledikom.utils.UserResponseState;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -31,6 +34,8 @@ public class UserService {
     private static final boolean INIT_RECEIVE_NEWS = true;
     private static final UserResponseState INIT_RESPONSE_STATE = UserResponseState.NONE;
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(UserService.class);
+
     @Value("${bot.username}")
     private String botUsername;
 
@@ -38,16 +43,18 @@ public class UserService {
     private final CouponService couponService;
     private final PollService pollService;
     private final BotUtilityService botUtilityService;
+    private final PharmacyService pharmacyService;
     private final LedikomBot ledikomBot;
 
     private SendMessageCallback sendMessageCallback;
     private SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
 
-    public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService, final BotUtilityService botUtilityService, @Lazy final LedikomBot ledikomBot) {
+    public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService, final BotUtilityService botUtilityService, final PharmacyService pharmacyService, @Lazy final LedikomBot ledikomBot) {
         this.userRepository = userRepository;
         this.couponService = couponService;
         this.pollService = pollService;
         this.botUtilityService = botUtilityService;
+        this.pharmacyService = pharmacyService;
         this.ledikomBot = ledikomBot;
     }
 
@@ -61,10 +68,11 @@ public class UserService {
         return userRepository.findAll();
     }
 
-
     public void addNewUser(final Long chatId) {
+        LOGGER.info("Saving user");
         User user = new User(chatId, INIT_REFERRAL_COUNT, INIT_RECEIVE_NEWS, INIT_RESPONSE_STATE);
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        LOGGER.info("Saved user: {}", savedUser);
         couponService.addHelloCouponToUser(user);
     }
 
@@ -73,7 +81,7 @@ public class UserService {
     }
 
     public User findByChatId(final Long chatId) {
-        return userRepository.findByChatId(chatId).orElseThrow(() -> new RuntimeException("User not found with id " + chatId));
+        return userRepository.findByChatId(chatId).orElseThrow(() -> new RuntimeException("User not found by id " + chatId));
     }
 
     public void processPoll(final Poll telegramPoll) {
@@ -101,6 +109,23 @@ public class UserService {
             user.setResponseState(UserResponseState.NONE);
             saveUser(user);
             sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.noteAdded(), chatId));
+        } else if (user.getResponseState() == UserResponseState.SENDING_DATE) {
+            try {
+                String[] splitDateString = text.trim().split("\\.");
+                if (splitDateString.length != 2) {
+                    throw new RuntimeException();
+                }
+                var day = Integer.parseInt(splitDateString[0]);
+                var month = Integer.parseInt(splitDateString[1]);
+                LocalDateTime specialDate = LocalDateTime.of(2000, month, day, 0, 0);
+                user.setSpecialDate(specialDate);
+                user.setResponseState(UserResponseState.NONE);
+                saveUser(user);
+                sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.yourSpecialDate(specialDate), chatId));
+            } catch (RuntimeException e) {
+                sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат даты, введите сообщение в цифровом формате:\n\nдень.месяц", chatId));
+                throw new RuntimeException("Invalid special date format: " + text);
+            }
         } else {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Нет такой команды!", chatId));
             throw new RuntimeException("Invalid user response state: " + user.getResponseState());
@@ -123,7 +148,11 @@ public class UserService {
     }
 
     public boolean userExistsByChatId(final long chatId) {
-        return userRepository.findByChatId(chatId).isPresent();
+        if (userRepository.findByChatId(chatId).isPresent()) {
+            return true;
+        }
+        LOGGER.error("User not exists by chatId: {}", chatId);
+        return false;
     }
 
     public List<SendMessage> processNoteRequestAndBuildSendMessageList(final long chatId) {
@@ -150,7 +179,7 @@ public class UserService {
         User user = findByChatId(chatId);
         user.setCity(City.valueOf(cityName));
 
-        List<Coupon> activeCouponsForUser = couponService.findAllTempActiveCouponsForUserByCity(user.getCity());
+        List<Coupon> activeCouponsForUser = couponService.findAllTempActiveCouponsByCity(user.getCity());
 
         couponService.clearUserCityCoupons(user);
 
@@ -173,20 +202,41 @@ public class UserService {
         return users.stream().filter(User::getReceiveNews).toList();
     }
 
-    public List<User> findAllUsersToAddCouponByPharmacies(final Set<Pharmacy> pharmacies) {
+    public List<User> findAllUsersByPharmaciesCities(final Set<Pharmacy> pharmacies) {
         return findAllUsers().stream().filter(user -> user.getCity() == null || pharmacies.stream().map(Pharmacy::getCity).toList().contains(user.getCity())).toList();
     }
 
     public void sendNewsToUsers(final NewsFromAdmin newsFromAdmin) throws IOException {
+        LOGGER.info("Sending news to users");
+
         List<User> usersToSendNews = findAllUsersToSendNews();
 
         if (newsFromAdmin.getPhotoPath() == null) {
-            usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendMessage(newsFromAdmin.getNews(), user.getChatId())));
+            usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendMessage(newsFromAdmin.getText(), user.getChatId())));
         } else {
             InputStream imageStream = new URL(newsFromAdmin.getPhotoPath()).openStream();
             InputFile inputFile = new InputFile(imageStream, "image.jpg");
-            usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, newsFromAdmin.getNews(), user.getChatId()));
+            usersToSendNews.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, newsFromAdmin.getText(), user.getChatId()));
         }
+    }
+
+    public void sendPromotionToUsers(final PromotionFromAdmin promotionFromAdmin) throws IOException {
+        LOGGER.info("Sending promotion to users");
+
+        List<User> usersToSendPromotion = filterUsersToSendNews(findAllUsersByPharmaciesCities(new HashSet<>(promotionFromAdmin.getPharmacies())));
+
+        if (promotionFromAdmin.getPhotoPath() != null) {
+            InputStream imageStream = new URL(promotionFromAdmin.getPhotoPath()).openStream();
+            InputFile inputFile = new InputFile(imageStream, "image.jpg");
+            usersToSendPromotion.forEach(user -> sendMessageWithPhotoCallback.execute(inputFile, "", user.getChatId()));
+        }
+
+        usersToSendPromotion.forEach(user -> {
+            boolean inAllPharmacies = promotionFromAdmin.getPharmacies().size() == pharmacyService.findAll().size();
+            var sm = botUtilityService.buildSendMessage(BotResponses.promotionText(promotionFromAdmin, inAllPharmacies), user.getChatId());
+            botUtilityService.addPromotionAcceptButton(sm);
+            sendMessageCallback.execute(sm);
+        });
     }
 
     public void sendAllCouponsList(final Long chatId) {
@@ -204,6 +254,8 @@ public class UserService {
     }
 
     public void sendPollToUsers(final Poll poll) {
+        LOGGER.info("Sending poll to users");
+
         List<User> usersToSendNews = findAllUsersToSendNews();
         usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendPoll(poll, user.getChatId())));
     }
@@ -218,5 +270,23 @@ public class UserService {
         user.setReceiveNews(!user.getReceiveNews());
         saveUser(user);
         sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.triggerReceiveNewsMessage(user), chatId));
+    }
+
+    public void sendNoteAndSetUserResponseState(final long chatId) {
+        List<SendMessage> sendMessageList = processNoteRequestAndBuildSendMessageList(chatId);
+        sendMessageList.forEach(sm -> sendMessageCallback.execute(sm));
+    }
+
+    public void sendDateAndSetUserResponseState(final long chatId) {
+        User user = findByChatId(chatId);
+        SendMessage sm;
+        if (user.getSpecialDate() == null) {
+            user.setResponseState(UserResponseState.SENDING_DATE);
+            saveUser(user);
+            sm = botUtilityService.buildSendMessage(BotResponses.addSpecialDate(), chatId);
+        } else {
+            sm = botUtilityService.buildSendMessage(BotResponses.yourSpecialDate(user.getSpecialDate()), chatId);
+        }
+        sendMessageCallback.execute(sm);
     }
 }

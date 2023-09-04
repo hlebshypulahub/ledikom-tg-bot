@@ -6,6 +6,8 @@ import com.ledikom.model.MessageIdInChat;
 import com.ledikom.model.UserCouponRecord;
 import com.ledikom.utils.BotResponses;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,8 @@ import java.time.LocalDateTime;
 // TODO: add logs
 @Service
 public class ScheduleService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ScheduleService.class);
 
     private static final int DELETION_EPSILON_SECONDS = 5;
 
@@ -69,10 +73,15 @@ public class ScheduleService {
         couponService.addCouponsToUsersOnFirstActiveDay();
     }
 
+    @Scheduled(cron = "0 15 8 * * *", zone = "GMT+3")
+    public void addDateCoupons() {
+        couponService.addDateCouponToUsers();
+    }
+
     @Scheduled(fixedRate = 1000 * 60)
     public void processMessagesToDeleteInMap() {
         LocalDateTime checkpointTimestamp = LocalDateTime.now().plusSeconds(DELETION_EPSILON_SECONDS);
-        BotService.messaegsToDeleteMap.entrySet().removeIf(entry -> {
+        BotService.messagesToDeleteMap.entrySet().removeIf(entry -> {
             if (entry.getValue().isBefore(checkpointTimestamp)) {
                 DeleteMessage deleteMessage = DeleteMessage.builder()
                         .chatId(entry.getKey().getChatId())

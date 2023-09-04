@@ -3,17 +3,16 @@ package com.ledikom.model;
 import com.ledikom.utils.City;
 import com.ledikom.utils.UserResponseState;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
-import lombok.Setter;
+import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
 @Getter
 @Setter
 @NoArgsConstructor
+@ToString
 @Entity
 @Table(name = "user_ledikom")
 public class User {
@@ -27,6 +26,7 @@ public class User {
     private UserResponseState responseState;
     private String note;
     private City city;
+    private LocalDateTime specialDate;
 
     public User(final Long chatId, final Integer referralCount, final Boolean receiveNews, final UserResponseState responseState) {
         this.chatId = chatId;

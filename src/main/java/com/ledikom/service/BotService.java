@@ -6,6 +6,8 @@ import com.ledikom.model.*;
 import com.ledikom.utils.BotResponses;
 import com.ledikom.utils.UtilityHelper;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -21,7 +23,9 @@ import java.util.*;
 @Component
 public class BotService {
 
-    public static final Map<MessageIdInChat, LocalDateTime> messaegsToDeleteMap = new HashMap<>();
+    public static final Map<MessageIdInChat, LocalDateTime> messagesToDeleteMap = new HashMap<>();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(BotService.class);
 
     @Value("${bot.username}")
     private String botUsername;
@@ -57,6 +61,7 @@ public class BotService {
 
     public void processStartOrRefLinkFollow(final String command, final Long chatId) {
         if (!command.endsWith("/start")) {
+            LOGGER.info("Processing ref link following: {}", command);
             String refCode = command.substring(7);
             userService.addNewRefUser(Long.parseLong(refCode), chatId);
         }
@@ -64,6 +69,8 @@ public class BotService {
     }
 
     public void processMusicRequest(final String command, final Long chatId) {
+        LOGGER.info("Processing music request: {}", command);
+
         MusicCallbackRequest musicCallbackRequest = UtilityHelper.getMusicCallbackRequest(command);
 
         if (musicCallbackRequest.readyToPlay()) {
@@ -73,7 +80,8 @@ public class BotService {
             SendAudio sendAudio = new SendAudio(String.valueOf(chatId), audioInputFile);
             LocalDateTime toDeleteTimestamp = LocalDateTime.now().plusMinutes(musicCallbackRequest.getDuration());
             MessageIdInChat messageIdInChatMusic = sendMusicFileCallback.execute(sendAudio);
-            messaegsToDeleteMap.put(messageIdInChatMusic, toDeleteTimestamp);
+            LOGGER.info("Message to delete put to map: {}, {}", messageIdInChatMusic, toDeleteTimestamp);
+            messagesToDeleteMap.put(messageIdInChatMusic, toDeleteTimestamp);
         } else {
             String imageName = musicCallbackRequest.getStyleString() + ".jpg";
             InputStream audioInputStream = getClass().getResourceAsStream("/" + imageName);
@@ -112,8 +120,9 @@ public class BotService {
         if (couponService.couponCanBeUsedNow(coupon)) {
             boolean inAllPharmacies = pharmacyService.findAll().size() == coupon.getPharmacies().size();
             sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(coupon, inAllPharmacies, couponDurationInMinutes), chatId);
-            botUtilityService.addAcceptCouponButton(sm, coupon, "Активировать");
+            botUtilityService.addAcceptCouponButton(sm, coupon, "Активировать купон");
         } else {
+            LOGGER.error("Coupon is not active for user: {}", chatId);
             sm = botUtilityService.buildSendMessage(BotResponses.couponIsNotActive(), chatId);
         }
         sendMessageCallback.execute(sm);
@@ -129,13 +138,9 @@ public class BotService {
         String couponTextWithBarcodeAndTimeSign = "Действителен до: " + couponService.getTimeSign() + "\n\n" + coupon.getBarcode() + "\n\n" + coupon.getText();
 
         MessageIdInChat messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
+        LOGGER.info("Adding coupon to map: {}, {}", messageIdInChat, couponTextWithBarcodeAndTimeSign);
         couponService.addCouponToMap(messageIdInChat, couponTextWithBarcodeAndTimeSign);
         userService.markCouponAsUsedForUser(user, coupon);
-    }
-
-    public void sendNoteAndSetUserResponseState(final long chatId) {
-        List<SendMessage> sendMessageList = userService.processNoteRequestAndBuildSendMessageList(chatId);
-        sendMessageList.forEach(sm -> sendMessageCallback.execute(sm));
     }
 
     public void sendCityMenu(final long chatId) {
@@ -143,5 +148,9 @@ public class BotService {
         var sm = botUtilityService.buildSendMessage(BotResponses.yourCityCanUpdate(user.getCity()), chatId);
         pharmacyService.addCitiesButtons(sm);
         sendMessageCallback.execute(sm);
+    }
+
+    public void sendPromotionAcceptedMessage(final long chatId) {
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.promotionAccepted(), chatId));
     }
 }

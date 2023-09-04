@@ -5,6 +5,8 @@ import com.ledikom.model.Coupon;
 import com.ledikom.utils.BotResponses;
 import com.ledikom.utils.City;
 import com.ledikom.utils.MusicMenuButton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
@@ -25,6 +27,8 @@ import java.util.stream.Collectors;
 @Component
 public class BotUtilityService {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(BotUtilityService.class);
+
     @Value("${bot.token}")
     private String botToken;
 
@@ -38,16 +42,21 @@ public class BotUtilityService {
             photo = msg.getDocument().getThumbnail();
         }
 
+        LOGGER.info("Photo got from message: {}", photo);
+
         if (photo != null) {
             GetFile getFileRequest = new GetFile();
             getFileRequest.setFileId(photo.getFileId());
             try {
                 File file = getFileFromBotCallback.execute(getFileRequest);
-                return "https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath();
+                String filePath = "https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath();
+                LOGGER.info("Photo file path: {}", filePath);
+                return filePath;
             } catch (TelegramApiException e) {
-                throw new RuntimeException(e);
+                throw new RuntimeException("Error in getting photo file path");
             }
         }
+
         return null;
     }
 
@@ -93,11 +102,15 @@ public class BotUtilityService {
     }
 
     public void addAcceptCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText) {
-        addCouponButton(sm, coupon, buttonText, "couponAccept_");
+        addButtonToMessage(sm, buttonText, "couponAccept_" + coupon.getId());
     }
 
     public void addPreviewCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText) {
-        addCouponButton(sm, coupon, buttonText, "couponPreview_");
+        addButtonToMessage(sm, buttonText, "couponPreview_" + coupon.getId());
+    }
+
+    public void addPromotionAcceptButton(final SendMessage sm) {
+        addButtonToMessage(sm, "Участвовать", "promotionAccept");
     }
 
     public InlineKeyboardMarkup createListOfCoupons(final Set<Coupon> coupons) {
@@ -138,12 +151,12 @@ public class BotUtilityService {
         sm.setReplyMarkup(markup);
     }
 
-    private void addCouponButton(final SendMessage sm, final Coupon coupon, final String buttonText, final String callbackData) {
+    private void addButtonToMessage(final SendMessage sm, final String buttonText, final String callbackData) {
         var markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
         var button = new InlineKeyboardButton();
         button.setText(buttonText);
-        button.setCallbackData(callbackData + coupon.getId());
+        button.setCallbackData(callbackData);
         List<InlineKeyboardButton> row = new ArrayList<>();
         row.add(button);
         keyboard.add(row);

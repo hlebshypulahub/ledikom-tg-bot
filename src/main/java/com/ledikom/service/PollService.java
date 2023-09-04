@@ -3,6 +3,8 @@ package com.ledikom.service;
 import com.ledikom.model.Poll;
 import com.ledikom.model.PollOption;
 import com.ledikom.repository.PollRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -30,8 +32,8 @@ public class PollService {
                 telegramPoll.getAllowMultipleAnswers(), telegramPoll.getCorrectOptionId(), telegramPoll.getExplanation());
     }
 
-    public void savePoll(final Poll poll) {
-        pollRepository.save(poll);
+    public Poll savePoll(final Poll poll) {
+        return pollRepository.save(poll);
     }
 
     public Poll findByQuestion(final String question) {

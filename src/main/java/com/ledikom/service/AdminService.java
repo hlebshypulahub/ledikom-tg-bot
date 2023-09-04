@@ -9,6 +9,8 @@ import com.ledikom.model.PromotionFromAdmin;
 import com.ledikom.utils.AdminMessageToken;
 import com.ledikom.utils.BotCommands;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.Message;
@@ -27,8 +29,12 @@ public class AdminService {
 
     public static final String DELIMITER = "&";
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(AdminService.class);
+
     @Value("${admin.id}")
     private Long adminId;
+    @Value("${admin.tech-id}")
+    private Long techAdminId;
     @Value("${hello-coupon.barcode}")
     private String helloCouponBarcode;
 
@@ -66,16 +72,21 @@ public class AdminService {
     }
 
     public void executeAdminActionOnPollReceived(final Poll poll) {
+        LOGGER.info("Processing admin poll request...");
         com.ledikom.model.Poll entityPoll = pollService.tgPollToLedikomPoll(poll);
         entityPoll.setLastVoteTimestamp(LocalDateTime.now());
-        pollService.savePoll(entityPoll);
+        com.ledikom.model.Poll savedPoll = pollService.savePoll(entityPoll);
+        LOGGER.info("Saved a poll:\n {}", savedPoll.toString());
         userService.sendPollToUsers(poll);
     }
 
     public void executeAdminActionOnMessageReceived(final Message message) throws IOException {
+        LOGGER.info("Processing admin message request...");
+
         String photoPath = null;
         if (botUtilityService.messageHasPhoto(message)) {
             photoPath = botUtilityService.getPhotoFromUpdate(message, getFileFromBotCallback);
+            LOGGER.info("Photo path received: {}", photoPath);
         }
 
         String text = getTextFromAdminMessage(message);
@@ -102,18 +113,20 @@ public class AdminService {
             return true;
         } else {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Количество аргументов не равно " + adminMessageToken.commandSize, adminId));
-            throw new RuntimeException("Неверный формат команды! Количество аргументов не равно " + AdminMessageToken.COUPON.commandSize + ", команда вызова: " + adminMessageToken.label);
+            throw new RuntimeException("Invalid command from admin, arguments list size not equal to " + adminMessageToken.commandSize + ", was calling command: " + adminMessageToken.label);
         }
     }
 
     private String getTextFromAdminMessage(final Message message) {
         if (botUtilityService.messageHasPhoto(message) && !message.getCaption().isBlank()) {
+            LOGGER.info("Text received from caption:\n{}", message.getCaption());
             return message.getCaption();
         } else if (message.hasText() && !message.getText().isBlank()) {
+            LOGGER.info("Text received from message:\n{}", message.getText());
             return message.getText();
         } else {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Сообщение не может быть пустым!", adminId));
-            throw new RuntimeException("Неверный формат команды! Сообщение не может быть пустым!");
+            throw new RuntimeException("Invalid command from admin, message cannot be blank");
         }
     }
 
@@ -122,8 +135,10 @@ public class AdminService {
 
         if (splitStringsFromAdminMessage.size() == 1 && Stream.of(BotCommands.values()).noneMatch(botCommand -> splitStringsFromAdminMessage.get(0).startsWith(botCommand.label))) {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER, adminId));
-            throw new RuntimeException("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER);
+            throw new RuntimeException("Invalid command format, no delimiter detected: " + DELIMITER);
         }
+
+        LOGGER.info("Split strings generated:\n{}", splitStringsFromAdminMessage);
 
         return splitStringsFromAdminMessage;
     }

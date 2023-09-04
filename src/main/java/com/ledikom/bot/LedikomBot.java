@@ -46,7 +46,7 @@ public class LedikomBot extends TelegramLongPollingBot {
     private final UserService userService;
     private final AdminService adminService;
 
-    private static final Logger log = LoggerFactory.getLogger(LedikomBot.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(LedikomBot.class);
     private static final Map<Predicate<String>, ChatIdCallback> chatIdActions = new HashMap<>();
     private static final Map<Predicate<String>, CommandWithChatIdCallback> commandWithChatIdActions = new HashMap<>();
 
@@ -204,7 +204,7 @@ public class LedikomBot extends TelegramLongPollingBot {
             Message sentMessage = execute(sendPhoto);
             return new MessageIdInChat(sentMessage.getChatId(), sentMessage.getMessageId());
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            LOGGER.trace(e.getMessage());
             return null;
         }
     }
@@ -215,7 +215,7 @@ public class LedikomBot extends TelegramLongPollingBot {
                 execute(message);
             }
         } catch (Exception e) {
-            log.trace(e.getMessage());
+            LOGGER.trace(e.getMessage());
         }
     }
 
@@ -224,7 +224,7 @@ public class LedikomBot extends TelegramLongPollingBot {
             Message sentMessage = execute(sendAudio);
             return new MessageIdInChat(sentMessage.getChatId(), sentMessage.getMessageId());
         } catch (Exception e) {
-            log.trace(e.getMessage());
+            LOGGER.trace(e.getMessage());
             return null;
         }
     }
@@ -233,7 +233,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         try {
             execute(deleteMessage);
         } catch (TelegramApiException e) {
-            e.printStackTrace();
+            LOGGER.trace(e.getMessage());
         }
     }
 
@@ -247,7 +247,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         try {
             execute(editMessageText);
         } catch (Exception e) {
-            log.trace(e.getMessage());
+            LOGGER.trace(e.getMessage());
         }
     }
 
@@ -261,7 +261,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         try {
             execute(editMessageCaption);
         } catch (Exception e) {
-            log.trace(e.getMessage());
+            LOGGER.trace(e.getMessage());
         }
     }
 }

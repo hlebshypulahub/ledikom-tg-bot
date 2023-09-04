@@ -4,6 +4,8 @@ import com.ledikom.model.Pharmacy;
 import com.ledikom.repository.PharmacyRepository;
 import com.ledikom.utils.City;
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 
@@ -11,10 +13,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 public class PharmacyService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PharmacyService.class);
 
     private final PharmacyRepository pharmacyRepository;
     private final BotUtilityService botUtilityService;
@@ -46,6 +51,8 @@ public class PharmacyService {
 
     // TODO: validation
     public List<Pharmacy> getPharmaciesFromIdsString(final String ids) {
+        LOGGER.info("Getting pharmacies for ids string: {}", ids);
+
         List<Pharmacy> pharmacies = new ArrayList<>();
         if (ids.isBlank()) {
             pharmacies.addAll(findAll());
@@ -55,6 +62,9 @@ public class PharmacyService {
                 pharmacies.add(findById(Long.parseLong(id)));
             }
         }
+
+        LOGGER.info("Pharmacies found:\n{}", pharmacies);
+
         return pharmacies;
     }
 }

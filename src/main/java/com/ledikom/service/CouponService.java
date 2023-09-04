@@ -9,6 +9,9 @@ import com.ledikom.utils.BotResponses;
 import com.ledikom.utils.City;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
+import lombok.extern.java.Log;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -26,6 +29,8 @@ import java.util.*;
 public class CouponService {
 
     public static final Map<MessageIdInChat, UserCouponRecord> userCoupons = new HashMap<>();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CouponService.class);
 
     @Value("${hello-coupon.barcode}")
     private String helloCouponBarcode;
@@ -56,7 +61,7 @@ public class CouponService {
     }
 
     @PostConstruct
-    public void initCallbacks() throws IOException {
+    public void initCallbacks() {
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
         this.sendMessageWithPhotoCallback = ledikomBot.getSendMessageWithPhotoCallback();
         saveStaleCoupons();
@@ -77,13 +82,14 @@ public class CouponService {
 
     public Coupon findCouponForUser(final User user, final String couponCommand) {
         int couponId = Integer.parseInt(couponCommand.split("_")[1]);
+        LOGGER.info("Looking for a coupon: {}", couponId);
         return user.getCoupons().stream()
                 .filter(coupon -> coupon.getId() == couponId)
                 .filter(this::couponCanBeUsedNow)
                 .findFirst()
                 .orElseThrow(() -> {
                     sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон не найден / завершен / использован", user.getChatId()));
-                    return new RuntimeException("Купон " + couponId + " не найден / завершен / использован для " + user.getChatId());
+                    return new RuntimeException("Coupon " + couponId + " not found / expired / used for user " + user.getChatId());
                 });
     }
 
@@ -91,7 +97,7 @@ public class CouponService {
         return couponRepository.findByBarcode(helloCouponBarcode).orElseThrow(() -> new RuntimeException("Hello coupon not found by barcode: " + helloCouponBarcode));
     }
 
-    public List<Coupon> findAllTempActiveCouponsForUserByCity(final City city) {
+    public List<Coupon> findAllTempActiveCouponsByCity(final City city) {
         return couponRepository.findAll().stream()
                 .filter(this::couponIsTempAndActive)
                 .filter(coupon -> coupon.getPharmacies().stream()
@@ -100,15 +106,19 @@ public class CouponService {
     }
 
     public void addHelloCouponToUser(final User user) {
-        addCouponToUser(couponRepository.findByBarcode(helloCouponBarcode).orElseThrow(() -> new RuntimeException("Hello coupon not found by barcode: " + helloCouponBarcode)), user);
+        addCouponToUser(getHelloCoupon(), user);
     }
 
     public void addCouponToMap(final MessageIdInChat messageIdInChat, final String couponText) {
         long expiryTimestamp = System.currentTimeMillis() + couponDurationInMinutes * 60 * 1000L;
-        userCoupons.put(messageIdInChat, new UserCouponRecord(expiryTimestamp, couponText));
+        UserCouponRecord userCouponRecord = new UserCouponRecord(expiryTimestamp, couponText);
+        LOGGER.info("Putting user coupon record to map: {}, {}", messageIdInChat, userCouponRecord);
+        userCoupons.put(messageIdInChat, userCouponRecord);
     }
 
     public void createAndSendNewCoupon(final String photoPath, final List<String> splitStringsFromAdminMessage) throws IOException {
+        LOGGER.info("Creating new coupon");
+
         Coupon coupon = getNewValidCoupon(splitStringsFromAdminMessage);
         couponRepository.save(coupon);
 
@@ -118,9 +128,10 @@ public class CouponService {
 
             sendCouponNewsToUsers(coupon, userService.filterUsersToSendNews(usersForCouponCities), photoPath);
 
+            LOGGER.info("Coupon added and news sent");
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон добавлен, рассылка произведена.", adminId));
         } else {
-
+            LOGGER.info("Coupon added, news will be sent on the first day of validity");
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон добавлен, рассылка будет произведена в первый день действия купона: "
                     + (coupon.getStartDate() != null ? coupon.getStartDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) : "нет даты"), adminId));
         }
@@ -141,9 +152,12 @@ public class CouponService {
             botUtilityService.addPreviewCouponButton(sm, coupon, "Активировать купон");
             sendMessageCallback.execute(sm);
         });
+        LOGGER.info("Coupon sent to users: {}", coupon.getId());
     }
 
     public void addDateCouponToUsers() {
+        LOGGER.info("Adding date coupon to users");
+
         Coupon coupon = couponRepository.findByBarcode(dateCouponBarcode).orElseThrow(() -> new RuntimeException("Date coupon not exist by barcode " + dateCouponBarcode));
 
         userService.findAllUsers().stream()
@@ -153,6 +167,7 @@ public class CouponService {
                                 && user.getSpecialDate().getMonth() == getZonedDateTimeNow().getMonth())
                 .toList()
                 .forEach(user -> {
+                    LOGGER.info("Adding date coupon for user: {}", user.getId());
                     addCouponToUser(coupon, user);
                     var sm = botUtilityService.buildSendMessage(BotResponses.specialDay(), user.getChatId());
                     botUtilityService.addPreviewCouponButton(sm, coupon, "Активировать");
@@ -161,9 +176,13 @@ public class CouponService {
     }
 
     public void addCouponsToUsersOnFirstActiveDay() {
+        LOGGER.info("Adding coupons on first active day");
+
         List<User> users = userService.findAllUsers();
 
         List<Coupon> couponsWithFirstActiveDay = couponRepository.findAll().stream().filter(coupon -> datesEqual(coupon.getStartDate(), getZonedDateTimeNow())).toList();
+
+        LOGGER.info("Coupons found:\n{}", couponsWithFirstActiveDay);
 
         for (Coupon coupon : couponsWithFirstActiveDay) {
             List<User> usersToGetNewCoupon = new ArrayList<>();
@@ -190,6 +209,7 @@ public class CouponService {
 
     // TODO: add regex checks and split on methods
     private Coupon getNewValidCoupon(final List<String> splitStringsFromAdminMessage) {
+        LOGGER.info("Generating new valid coupon");
 
         String barcode = splitStringsFromAdminMessage.get(1);
 
@@ -198,10 +218,11 @@ public class CouponService {
         }
 
         byte[] barcodeImageByteArray;
+        String requestUrl = "https://barcodeapi.org/api/EAN13/" + barcode;
         try {
-            barcodeImageByteArray = restTemplate.getForObject("https://barcodeapi.org/api/EAN13/" + barcode, byte[].class);
+            barcodeImageByteArray = restTemplate.getForObject(requestUrl, byte[].class);
         } catch (RuntimeException e) {
-            e.printStackTrace();
+            LOGGER.error("Failed to GET barcode image, request URL: {}", requestUrl);
             String noBarcodeImagePath = "/no-barcode.png";
             try (InputStream inputStream = CouponService.class.getResourceAsStream(noBarcodeImagePath)) {
                 if (inputStream == null) {
@@ -209,7 +230,7 @@ public class CouponService {
                 }
                 barcodeImageByteArray = inputStream.readAllBytes();
             } catch (IOException ex) {
-                throw new RuntimeException(ex);
+                throw new RuntimeException("Failed to create input stream for barcode image");
             }
         }
 
@@ -221,7 +242,7 @@ public class CouponService {
                 endDate = null;
             } else {
                 sendMessageCallback.execute(botUtilityService.buildSendMessage("Купон неактивен! Проверьте даты действия!", adminId));
-                throw new RuntimeException("Купон неактивен! Проверьте даты действия!");
+                throw new RuntimeException("Coupon to be created is not active, dates string: " + datesArgument);
             }
         } else {
             String[] splitDates = datesArgument.split("-");
@@ -243,7 +264,11 @@ public class CouponService {
         String text = splitStringsFromAdminMessage.get(5);
         String news = splitStringsFromAdminMessage.get(6);
 
-        return new Coupon(barcode, barcodeImageByteArray, startDate, endDate, pharmacies, name, text, news);
+        Coupon coupon = new Coupon(barcode, barcodeImageByteArray, startDate, endDate, pharmacies, name, text, news);
+
+        LOGGER.info("Coupon generated:\n{}", coupon);
+
+        return coupon;
     }
 
     private boolean couponIsTempAndActive(final Coupon coupon) {
@@ -266,9 +291,13 @@ public class CouponService {
     }
 
     public void deleteExpiredCoupons() {
-        List<Coupon> coupons = couponRepository.findAll();
+        LOGGER.info("Deleting expired coupons");
 
+        List<Coupon> coupons = couponRepository.findAll();
         List<Coupon> couponsToDelete = coupons.stream().filter(coupon -> coupon.getEndDate() != null && coupon.getEndDate().isBefore(getZonedDateTimeNow())).toList();
+
+        LOGGER.info("Coupons to delete:\n{}", couponsToDelete);
+
         couponsToDelete.forEach(coupon -> coupon.getUsers().forEach(user -> {
             user.getCoupons().remove(coupon);
             userService.saveUser(user);
@@ -278,6 +307,8 @@ public class CouponService {
 
     @Transactional
     public void clearUserCityCoupons(final User user) {
+        LOGGER.info("Clearing user city coupons");
+
         List<Coupon> couponsToDelete = user.getCoupons().stream().filter(coupon -> !couponIsStale(coupon)).toList();
         couponsToDelete.forEach(coupon -> {
             user.getCoupons().remove(coupon);

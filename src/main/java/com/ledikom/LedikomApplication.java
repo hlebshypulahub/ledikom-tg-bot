@@ -8,6 +8,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 @SpringBootApplication
 @ComponentScan(basePackages = {
         "com.ledikom",

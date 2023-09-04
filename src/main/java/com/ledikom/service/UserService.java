@@ -10,6 +10,8 @@ import com.ledikom.utils.City;
 import com.ledikom.utils.UserResponseState;
 import jakarta.annotation.PostConstruct;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,8 @@ public class UserService {
     private static final int INIT_REFERRAL_COUNT = 0;
     private static final boolean INIT_RECEIVE_NEWS = true;
     private static final UserResponseState INIT_RESPONSE_STATE = UserResponseState.NONE;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(UserService.class);
 
     @Value("${bot.username}")
     private String botUsername;
@@ -64,10 +68,11 @@ public class UserService {
         return userRepository.findAll();
     }
 
-
     public void addNewUser(final Long chatId) {
+        LOGGER.info("Saving user");
         User user = new User(chatId, INIT_REFERRAL_COUNT, INIT_RECEIVE_NEWS, INIT_RESPONSE_STATE);
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        LOGGER.info("Saved user: {}", savedUser);
         couponService.addHelloCouponToUser(user);
     }
 
@@ -76,7 +81,7 @@ public class UserService {
     }
 
     public User findByChatId(final Long chatId) {
-        return userRepository.findByChatId(chatId).orElseThrow(() -> new RuntimeException("User not found with id " + chatId));
+        return userRepository.findByChatId(chatId).orElseThrow(() -> new RuntimeException("User not found by id " + chatId));
     }
 
     public void processPoll(final Poll telegramPoll) {
@@ -143,7 +148,11 @@ public class UserService {
     }
 
     public boolean userExistsByChatId(final long chatId) {
-        return userRepository.findByChatId(chatId).isPresent();
+        if (userRepository.findByChatId(chatId).isPresent()) {
+            return true;
+        }
+        LOGGER.error("User not exists by chatId: {}", chatId);
+        return false;
     }
 
     public List<SendMessage> processNoteRequestAndBuildSendMessageList(final long chatId) {
@@ -170,7 +179,7 @@ public class UserService {
         User user = findByChatId(chatId);
         user.setCity(City.valueOf(cityName));
 
-        List<Coupon> activeCouponsForUser = couponService.findAllTempActiveCouponsForUserByCity(user.getCity());
+        List<Coupon> activeCouponsForUser = couponService.findAllTempActiveCouponsByCity(user.getCity());
 
         couponService.clearUserCityCoupons(user);
 
@@ -198,6 +207,8 @@ public class UserService {
     }
 
     public void sendNewsToUsers(final NewsFromAdmin newsFromAdmin) throws IOException {
+        LOGGER.info("Sending news to users");
+
         List<User> usersToSendNews = findAllUsersToSendNews();
 
         if (newsFromAdmin.getPhotoPath() == null) {
@@ -210,6 +221,8 @@ public class UserService {
     }
 
     public void sendPromotionToUsers(final PromotionFromAdmin promotionFromAdmin) throws IOException {
+        LOGGER.info("Sending promotion to users");
+
         List<User> usersToSendPromotion = filterUsersToSendNews(findAllUsersByPharmaciesCities(new HashSet<>(promotionFromAdmin.getPharmacies())));
 
         if (promotionFromAdmin.getPhotoPath() != null) {
@@ -241,6 +254,8 @@ public class UserService {
     }
 
     public void sendPollToUsers(final Poll poll) {
+        LOGGER.info("Sending poll to users");
+
         List<User> usersToSendNews = findAllUsersToSendNews();
         usersToSendNews.forEach(user -> sendMessageCallback.execute(botUtilityService.buildSendPoll(poll, user.getChatId())));
     }

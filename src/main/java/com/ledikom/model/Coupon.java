@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -12,7 +13,6 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString
 @Entity
 public class Coupon {
 
@@ -45,5 +45,19 @@ public class Coupon {
         this.name = name;
         this.text = text;
         this.news = news;
+    }
+
+    @Override
+    public String toString() {
+        return "Coupon{" +
+                "id=" + id +
+                ", barcode='" + barcode + '\'' +
+                ", barcodeImageByteArray=" + Arrays.toString(barcodeImageByteArray) +
+                ", startDate=" + startDate +
+                ", endDate=" + endDate +
+                ", name='" + name + '\'' +
+                ", text='" + text + '\'' +
+                ", news='" + news + '\'' +
+                '}';
     }
 }

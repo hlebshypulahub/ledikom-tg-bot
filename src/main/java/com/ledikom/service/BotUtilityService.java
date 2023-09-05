@@ -67,7 +67,9 @@ public class BotUtilityService {
     public SendMessage buildSendMessage(String text, long chatId) {
         return SendMessage.builder()
                 .chatId(chatId)
-                .text(text).build();
+                .text(text)
+                .parseMode("Markdown")
+                .build();
     }
 
     public SendPoll buildSendPoll(Poll poll, long chatId) {
@@ -86,7 +88,7 @@ public class BotUtilityService {
     public void addMusicMenuButtonsToSendMessage(final SendMessage sm) {
         addButtonsToMessage(sm, 2,
                 Arrays.stream(MusicMenuButton.values()).map(value -> value.buttonText).collect(Collectors.toList()),
-                        Arrays.stream(MusicMenuButton.values()).map(value -> value.callbackDataString).collect(Collectors.toList()));
+                Arrays.stream(MusicMenuButton.values()).map(value -> value.callbackDataString).collect(Collectors.toList()));
     }
 
     public void addMusicDurationButtonsToSendMessage(final SendMessage sm, String musicString) {
@@ -97,7 +99,7 @@ public class BotUtilityService {
 
     public void addCitiesButtons(final SendMessage sm, final Set<City> cities) {
         addButtonsToMessage(sm, 2,
-                cities.stream().map(city -> city.label).collect(Collectors.toList()),
+                cities.stream().map(city -> "\uD83C\uDFE5 " + city.label).collect(Collectors.toList()),
                 cities.stream().map(Enum::name).collect(Collectors.toList()));
     }
 

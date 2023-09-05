@@ -36,6 +36,14 @@ public class CouponService {
     private String helloCouponBarcode;
     @Value("${date-coupon.barcode}")
     private String dateCouponBarcode;
+
+    @Value("${ref10-coupon.barcode}")
+    private String ref10CouponBarcode;
+    @Value("${ref20-coupon.barcode}")
+    private String ref20CouponBarcode;
+    @Value("${ref30-coupon.barcode}")
+    private String ref30CouponBarcode;
+
     @Value("${coupon.duration-minutes}")
     private int couponDurationInMinutes;
     @Value("${admin.id}")
@@ -68,16 +76,28 @@ public class CouponService {
     }
 
     private void saveStaleCoupons() {
+        List<Coupon> couponsToSave = new ArrayList<>();
         if (couponRepository.findByBarcode(helloCouponBarcode).isEmpty()) {
-            Coupon coupon = getNewValidCoupon(List.of("coupon", helloCouponBarcode, "", "", "Приветственный купон -5%",
-                    "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!", ""));
-            couponRepository.save(coupon);
+            couponsToSave.add(getNewValidCoupon(List.of("coupon", helloCouponBarcode, "", "", "Приветственный купон -5%",
+                    "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой товар из нашего ассортимента!", "")));
         }
         if (couponRepository.findByBarcode(dateCouponBarcode).isEmpty()) {
-            Coupon coupon = getNewValidCoupon(List.of("coupon", dateCouponBarcode, "", "", "Особенная дата",
-                    "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой лекарственный препарат из нашего ассортимента!", ""));
-            couponRepository.save(coupon);
+            couponsToSave.add(getNewValidCoupon(List.of("coupon", dateCouponBarcode, "", "", "Купон на Особенную Дату -5%",
+                    "Здоровье – важнейшая ценность! С этим купоном вы получаете 5% скидку на любой товар из нашего ассортимента!", "")));
         }
+        if (couponRepository.findByBarcode(ref10CouponBarcode).isEmpty()) {
+            couponsToSave.add(getNewValidCoupon(List.of("coupon", ref10CouponBarcode, "", "", "Купон за приглашенных друзей -10%",
+                    "Здоровье – важнейшая ценность! С этим купоном вы получаете 10% скидку на любой товар из нашего ассортимента!", "")));
+        }
+        if (couponRepository.findByBarcode(ref20CouponBarcode).isEmpty()) {
+            couponsToSave.add(getNewValidCoupon(List.of("coupon", ref20CouponBarcode, "", "", "Купон за приглашенных друзей -20%",
+                    "Здоровье – важнейшая ценность! С этим купоном вы получаете 20% скидку на любой товар из нашего ассортимента!", "")));
+        }
+        if (couponRepository.findByBarcode(ref30CouponBarcode).isEmpty()) {
+            couponsToSave.add(getNewValidCoupon(List.of("coupon", ref30CouponBarcode, "", "", "Купон за приглашенных друзей -30%",
+                    "Здоровье – важнейшая ценность! С этим купоном вы получаете 30% скидку на любой товар из нашего ассортимента!", "")));
+        }
+        couponRepository.saveAll(couponsToSave);
     }
 
     public Coupon findCouponForUser(final User user, final String couponCommand) {
@@ -155,6 +175,28 @@ public class CouponService {
         LOGGER.info("Coupon sent to users: {}", coupon.getId());
     }
 
+    public void addRefCouponToUser(final User user) {
+        Optional<Coupon> optionalCoupon = Optional.empty();
+        if (user.getReferralCount() == 10) {
+            optionalCoupon = couponRepository.findByBarcode(ref10CouponBarcode);
+        } else if (user.getReferralCount() == 20) {
+            optionalCoupon = couponRepository.findByBarcode(ref20CouponBarcode);
+        } else if (user.getReferralCount() == 30) {
+            optionalCoupon = couponRepository.findByBarcode(ref30CouponBarcode);
+        }
+
+        if (optionalCoupon.isPresent()) {
+            Coupon coupon = optionalCoupon.get();
+            LOGGER.info("Adding referral coupon {} for user: {}", coupon.getName(), user.getId());
+            addCouponToUser(coupon, user);
+            var sm = botUtilityService.buildSendMessage(BotResponses.refCoupon(user.getReferralCount()), user.getChatId());
+            botUtilityService.addPreviewCouponButton(sm, coupon, "Активировать купон");
+            sendMessageCallback.execute(sm);
+        }
+
+        BotService.eventCollector.incrementDateCoupon();
+    }
+
     public void addDateCouponToUsers() {
         LOGGER.info("Adding date coupon to users");
 
@@ -170,9 +212,11 @@ public class CouponService {
                     LOGGER.info("Adding date coupon for user: {}", user.getId());
                     addCouponToUser(coupon, user);
                     var sm = botUtilityService.buildSendMessage(BotResponses.specialDay(), user.getChatId());
-                    botUtilityService.addPreviewCouponButton(sm, coupon, "Активировать");
+                    botUtilityService.addPreviewCouponButton(sm, coupon, "Активировать купон");
                     sendMessageCallback.execute(sm);
                 });
+
+        BotService.eventCollector.incrementDateCoupon();
     }
 
     public void addCouponsToUsersOnFirstActiveDay() {
@@ -237,7 +281,11 @@ public class CouponService {
         String datesArgument = splitStringsFromAdminMessage.get(2);
         LocalDateTime startDate, endDate;
         if (datesArgument.isBlank()) {
-            if (barcode.equals(helloCouponBarcode) || barcode.equals(dateCouponBarcode)) {
+            if (barcode.equals(helloCouponBarcode)
+                    || barcode.equals(dateCouponBarcode)
+                    || barcode.equals(ref10CouponBarcode)
+                    || barcode.equals(ref20CouponBarcode)
+                    || barcode.equals(ref30CouponBarcode)) {
                 startDate = null;
                 endDate = null;
             } else {

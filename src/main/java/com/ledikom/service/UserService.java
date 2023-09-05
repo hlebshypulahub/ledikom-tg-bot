@@ -99,6 +99,8 @@ public class UserService {
             pollToUpdate.setLastVoteTimestamp(LocalDateTime.now());
 
             pollService.savePoll(pollToUpdate);
+
+            BotService.eventCollector.incrementPoll();
         }
     }
 
@@ -109,6 +111,7 @@ public class UserService {
             user.setResponseState(UserResponseState.NONE);
             saveUser(user);
             sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.noteAdded(), chatId));
+            BotService.eventCollector.incrementNote();
         } else if (user.getResponseState() == UserResponseState.SENDING_DATE) {
             try {
                 String[] splitDateString = text.trim().split("\\.");
@@ -122,6 +125,7 @@ public class UserService {
                 user.setResponseState(UserResponseState.NONE);
                 saveUser(user);
                 sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.yourSpecialDate(specialDate), chatId));
+                BotService.eventCollector.incrementDate();
             } catch (RuntimeException e) {
                 sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат даты, введите сообщение в цифровом формате:\n\nдень.месяц", chatId));
                 throw new RuntimeException("Invalid special date format: " + text);
@@ -143,7 +147,10 @@ public class UserService {
         if (!selfLinkOrUserExists) {
             User user = findByChatId(chatIdFromRefLink);
             user.setReferralCount(user.getReferralCount() + 1);
+            sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.referralMessage(getRefLink(chatIdFromRefLink), user.getReferralCount()), chatIdFromRefLink));
+            couponService.addRefCouponToUser(user);
             userRepository.save(user);
+            BotService.eventCollector.incrementRefLink();
         }
     }
 
@@ -192,6 +199,8 @@ public class UserService {
         } else {
             sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.cityAdded(cityName), chatId));
         }
+
+        BotService.eventCollector.incrementCity();
     }
 
     public List<User> findAllUsersToSendNews() {
@@ -261,13 +270,21 @@ public class UserService {
     }
 
     public void sendReferralLinkForUser(final Long chatId) {
-        String refLink = "https://t.me/" + botUsername + "?start=" + chatId;
-        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.referralMessage(refLink, findByChatId(chatId).getReferralCount()), chatId));
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.referralMessage(getRefLink(chatId), findByChatId(chatId).getReferralCount()), chatId));
     }
 
-    public void sendTriggerReceiveNewsMessage(final Long chatId) {
+    private String getRefLink(final Long chatId) {
+        return "https://t.me/" + botUsername + "?start=" + chatId;
+    }
+
+    public void triggerReceiveNewsMessage(final Long chatId) {
         User user = findByChatId(chatId);
         user.setReceiveNews(!user.getReceiveNews());
+        if (user.getReceiveNews()) {
+            BotService.eventCollector.decrementNewsDisabled();
+        } else {
+            BotService.eventCollector.incrementNewsDisabled();
+        }
         saveUser(user);
         sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.triggerReceiveNewsMessage(user), chatId));
     }

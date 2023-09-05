@@ -12,7 +12,6 @@ import java.util.Set;
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@ToString
 public class Pharmacy {
 
     @Id
@@ -35,5 +34,18 @@ public class Pharmacy {
         this.openHours = openHours;
         this.phoneNumber = phoneNumber;
         this.coordinates = coordinates;
+    }
+
+    @Override
+    public String toString() {
+        return "Pharmacy{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", city=" + city +
+                ", address='" + address + '\'' +
+                ", openHours='" + openHours + '\'' +
+                ", phoneNumber='" + phoneNumber + '\'' +
+                ", coordinates='" + coordinates + '\'' +
+                '}';
     }
 }

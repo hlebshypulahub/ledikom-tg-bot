@@ -4,6 +4,7 @@ import com.ledikom.bot.LedikomBot;
 import com.ledikom.callback.*;
 import com.ledikom.model.MessageIdInChat;
 import com.ledikom.model.UserCouponRecord;
+import com.ledikom.repository.EventCollectorRepository;
 import com.ledikom.utils.BotResponses;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
@@ -31,12 +32,14 @@ public class ScheduleService {
     private final PollService pollService;
     private final CouponService couponService;
     private final LedikomBot ledikomBot;
+    private final EventCollectorRepository eventCollectorRepository;
 
-    public ScheduleService(final BotUtilityService botUtilityService, final PollService pollService, final CouponService couponService, final LedikomBot ledikomBot) {
+    public ScheduleService(final BotUtilityService botUtilityService, final PollService pollService, final CouponService couponService, final LedikomBot ledikomBot, final EventCollectorRepository eventCollectorRepository) {
         this.botUtilityService = botUtilityService;
         this.pollService = pollService;
         this.couponService = couponService;
         this.ledikomBot = ledikomBot;
+        this.eventCollectorRepository = eventCollectorRepository;
     }
 
     private SendMessageCallback sendMessageCallback;
@@ -48,6 +51,14 @@ public class ScheduleService {
         this.sendMessageCallback = ledikomBot.getSendMessageCallback();
         this.editMessageWithPhotoCallback = ledikomBot.getEditMessageWithPhotoCallback();
         this.deleteMessageCallback = ledikomBot.getDeleteMessageCallback();
+    }
+
+    @Scheduled(cron = "0 0 8-19 * * *", zone = "GMT+3")
+    public void sendEventsToAdmin() {
+        BotService.eventCollector.setTimestamp(LocalDateTime.now());
+        eventCollectorRepository.save(BotService.eventCollector);
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotService.eventCollector.messageToAdmin(), adminId));
+        BotService.eventCollector.reset();
     }
 
     @Scheduled(fixedRate = 1000)
@@ -94,7 +105,7 @@ public class ScheduleService {
         });
     }
 
-    @Scheduled(fixedRate = 1000 * 60 * 60)
+    @Scheduled(cron = "0 0 8-19 * * *", zone = "GMT+3")
     public void sendPollInfoToAdmin() {
         SendMessage sm = botUtilityService.buildSendMessage(pollService.getPollsInfoForAdmin(), adminId);
         sendMessageCallback.execute(sm);

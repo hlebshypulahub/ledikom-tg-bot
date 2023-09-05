@@ -24,11 +24,14 @@ import java.util.*;
 public class BotService {
 
     public static final Map<MessageIdInChat, LocalDateTime> messagesToDeleteMap = new HashMap<>();
+    public static final EventCollector eventCollector = new EventCollector();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(BotService.class);
 
     @Value("${bot.username}")
     private String botUsername;
+    @Value("${hello-coupon.barcode}")
+    private String helloCouponBarcode;
     @Value("${coupon.duration-minutes}")
     private int couponDurationInMinutes;
     @Value("${admin.id}")
@@ -82,12 +85,13 @@ public class BotService {
             MessageIdInChat messageIdInChatMusic = sendMusicFileCallback.execute(sendAudio);
             LOGGER.info("Message to delete put to map: {}, {}", messageIdInChatMusic, toDeleteTimestamp);
             messagesToDeleteMap.put(messageIdInChatMusic, toDeleteTimestamp);
+            eventCollector.incrementMusic();
         } else {
             String imageName = musicCallbackRequest.getStyleString() + ".jpg";
             InputStream audioInputStream = getClass().getResourceAsStream("/" + imageName);
             InputFile inputFile = new InputFile(audioInputStream, imageName);
             sendMessageWithPhotoCallback.execute(inputFile, BotResponses.goodNight(), chatId);
-            var sm = SendMessage.builder().chatId(chatId).text(BotResponses.musicDurationMenu()).build();
+            var sm = botUtilityService.buildSendMessage(BotResponses.musicDurationMenu(), chatId);
             botUtilityService.addMusicDurationButtonsToSendMessage(sm, command);
             sendMessageCallback.execute(sm);
         }
@@ -109,6 +113,8 @@ public class BotService {
             sm = botUtilityService.buildSendMessage(BotResponses.chooseYourCity(), chatId);
             pharmacyService.addCitiesButtons(sm);
             sendMessageCallback.execute(sm);
+
+            eventCollector.incrementNewUser();
         }
     }
 
@@ -141,6 +147,11 @@ public class BotService {
         LOGGER.info("Adding coupon to map: {}, {}", messageIdInChat, couponTextWithBarcodeAndTimeSign);
         couponService.addCouponToMap(messageIdInChat, couponTextWithBarcodeAndTimeSign);
         userService.markCouponAsUsedForUser(user, coupon);
+
+        eventCollector.incrementCoupon();
+        if (coupon.getBarcode().equals(helloCouponBarcode)) {
+            eventCollector.incrementHelloCoupon();
+        }
     }
 
     public void sendCityMenu(final long chatId) {
@@ -152,5 +163,6 @@ public class BotService {
 
     public void sendPromotionAcceptedMessage(final long chatId) {
         sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.promotionAccepted(), chatId));
+        eventCollector.incrementPromotion();
     }
 }

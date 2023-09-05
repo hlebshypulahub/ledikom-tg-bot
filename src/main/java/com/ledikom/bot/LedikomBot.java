@@ -17,6 +17,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.botapimethods.BotApiMethodMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendAudio;
+import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption;
@@ -72,8 +73,8 @@ public class LedikomBot extends TelegramLongPollingBot {
                 this.userService::sendAllCouponsList);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.REF_LINK.label),
                 this.userService::sendReferralLinkForUser);
-        chatIdActions.put(cmd -> cmd.equals(BotCommands.REF_LINK.label),
-                this.userService::sendTriggerReceiveNewsMessage);
+        chatIdActions.put(cmd -> cmd.equals(BotCommands.TRIGGER_NEWS.label),
+                this.userService::triggerReceiveNewsMessage);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.NOTES.label),
                 this.userService::sendNoteAndSetUserResponseState);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.DATE.label),
@@ -212,6 +213,8 @@ public class LedikomBot extends TelegramLongPollingBot {
     private void sendMessage(BotApiMethodMessage message) {
         try {
             if (message != null) {
+                System.out.println(((SendMessage) message).getChatId());
+                System.out.println(((SendMessage) message).getText());
                 execute(message);
             }
         } catch (Exception e) {

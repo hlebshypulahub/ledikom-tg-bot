@@ -12,7 +12,6 @@ import java.util.Set;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
 @Entity
 @Table(name = "user_ledikom")
 public class User {
@@ -42,4 +41,18 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "coupon_id")
     )
     private Set<Coupon> coupons = new HashSet<>();
+
+    @Override
+    public String toString() {
+        return "User{" +
+                "id=" + id +
+                ", chatId=" + chatId +
+                ", referralCount=" + referralCount +
+                ", receiveNews=" + receiveNews +
+                ", responseState=" + responseState +
+                ", note='" + note + '\'' +
+                ", city=" + city +
+                ", specialDate=" + specialDate +
+                '}';
+    }
 }

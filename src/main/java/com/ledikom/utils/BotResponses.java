@@ -8,6 +8,7 @@ import java.util.List;
 
 public final class BotResponses {
 
+    //
     public static String startMessage() {
         return """
                 *Приветствуем, это бот сетки аптек Ледиком!*
@@ -23,50 +24,56 @@ public final class BotResponses {
                 """;
     }
 
+    //
     public static String couponAcceptMessage(final Coupon coupon, final boolean inAllPharmacies, final int durationInMinutes) {
         StringBuilder sb = new StringBuilder(coupon.getText() + "\n\n");
 
         appendPharmacies(sb, coupon.getPharmacies().stream().toList(), inAllPharmacies);
-        sb.append("\n");
+        sb.append("\n\n");
 
         if (coupon.getStartDate() != null && coupon.getEndDate() != null) {
-            sb.append("С ").append(coupon.getStartDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))).append(" по ").append(coupon.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))).append("\n\n");
+            sb.append("*С ").append(coupon.getStartDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))).append(" по ").append(coupon.getEndDate().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))).append("*\n\n");
         }
 
-        sb.append("Купон действует в течение ").append(durationInMinutes).append(" минут. Активируйте его при кассе.");
+        sb.append("*Купон действует в течение ").append(durationInMinutes).append(" минут. Активируйте его при кассе.*");
 
         return sb.toString();
     }
 
-    public static String referralMessage(final String refLink, final int referralCount) {
-        return "Ваша реферальная ссылка:\n\n\n" + "[" + refLink + "](" + refLink + ")" + "\n\n\nКоличество приглашенных вами пользователей: *" + referralCount + "*\n\n\nПоделитесь с другом и получайте бонусы: НАПИСАТЬ КАКИЕ БОНУСЫ И ДОАБВИТЬ АВТО ФУНКЦИОНАЛ";
+    public static String referralMessage(final String refLink, final int referralCount, final Coupon ...couponsFirst10Second20Third30) {
+        return "Ваша реферальная ссылка:\n\n\n" + "[" + refLink + "](" + refLink + ")" + "\n\n\n*Количество приглашенных вами пользователей:   "
+                + referralCount + "*\n\n\nПоделитесь ссылкой с вашими контактами и получайте бонусы:\n\n"
+                + "\uD83E\uDD49 10 приглашенных: " + couponsFirst10Second20Third30[0].getName() + "\n"
+                + "\uD83E\uDD48 20 приглашенных: " + couponsFirst10Second20Third30[1].getName() + "\n"
+                + "\uD83E\uDD47 30 приглашенных: " + couponsFirst10Second20Third30[2].getName();
     }
 
     public static String couponExpiredMessage() {
-        return "Время вашего купона истекло.";
+        return "Время вашего купона истекло ⌛";
     }
 
     public static String triggerReceiveNewsMessage(final User user) {
-        return "Подписка на рассылку новостей и акций " + (user.getReceiveNews() ? "включена." : "отключена.");
+        return "Подписка на рассылку новостей и акций " + (user.getReceiveNews() ? "включена \uD83D\uDD14" : "отключена \uD83D\uDD15");
     }
 
     public static String listOfCouponsMessage() {
-        return "Ваши купоны:";
+        return "\uD83D\uDCB8 Ваши купоны:";
     }
 
     public static String noActiveCouponsMessage() {
-        return "У вас нету купонов";
+        return "У вас нет купонов \uD83D\uDC40\n\n"
+                + "Дождитесь новой рассылки акций в наших аптеках, а также приглашайте друзей, используя свою реферальную ссылку ⬇";
     }
 
     public static String initialCouponText(final String couponTextWithBarcode, final long couponDurationInMinutes) {
-        return "Времени осталось: " + UtilityHelper.convertIntToTimeInt(couponDurationInMinutes) + ":00" +
+        return "Времени осталось: *" + UtilityHelper.convertIntToTimeInt(couponDurationInMinutes) + ":00*" +
                 "\n\n" +
                 couponTextWithBarcode;
     }
 
     public static String updatedCouponText(final UserCouponRecord userCouponRecord, final long timeLeftInSeconds) {
-        return "Времени осталось: " + UtilityHelper.convertIntToTimeInt(timeLeftInSeconds / 60) + ":" + UtilityHelper.convertIntToTimeInt(timeLeftInSeconds % 60) +
-                "\n\n" +
+        return "Времени осталось: *" + UtilityHelper.convertIntToTimeInt(timeLeftInSeconds / 60) + ":" + UtilityHelper.convertIntToTimeInt(timeLeftInSeconds % 60) +
+                "*\n\n" +
                 userCouponRecord.getText();
     }
 
@@ -75,15 +82,17 @@ public final class BotResponses {
     }
 
     public static String noteAdded() {
-        return "Заметка записана, можете редактировать через меню";
+        return "Заметка сохранена \uD83D\uDD16\n\n_*Чтобы просмотреть или редактировать, воспользуйтесь меню бота_";
     }
 
-    public static String editNote() {
-        return "*Чтобы редактировать заметку скопируйте свою заметку из сообщения выше, вставьте в поле ввода, измените и отправте";
+    public static String editNote(final String note) {
+        return "Ваша заметка:\n\n" +
+                "`" + note + "`\n\n" +
+                "_*Чтобы редактировать, скопируйте текст заметки (нажать на текст), вставьте в поле ввода, измените текст и отправьте сообщение._";
     }
 
     public static String addNote() {
-        return "Введите нотатку и вышлите сообщение";
+        return "Чтобы добавить заметку, введите сообщение и отправьте ✏";
     }
 
     public static String musicMenu() {
@@ -161,5 +170,9 @@ public final class BotResponses {
 
     public static String refCoupon(final int referralCount) {
         return "Вы пригласили уже " + referralCount + " новых пользователей. Спасибо. Вы получаете купон!";
+    }
+
+    public static String responseTimeExceeded() {
+        return "Время ожидания на ответ вышло.\n\nВ случае необходимости повторите операцию через меню.";
     }
 }

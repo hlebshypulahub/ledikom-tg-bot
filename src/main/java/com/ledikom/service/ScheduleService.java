@@ -31,13 +31,15 @@ public class ScheduleService {
     private final BotUtilityService botUtilityService;
     private final PollService pollService;
     private final CouponService couponService;
+    private final UserService userService;
     private final LedikomBot ledikomBot;
     private final EventCollectorRepository eventCollectorRepository;
 
-    public ScheduleService(final BotUtilityService botUtilityService, final PollService pollService, final CouponService couponService, final LedikomBot ledikomBot, final EventCollectorRepository eventCollectorRepository) {
+    public ScheduleService(final BotUtilityService botUtilityService, final PollService pollService, final CouponService couponService, final UserService userService, final LedikomBot ledikomBot, final EventCollectorRepository eventCollectorRepository) {
         this.botUtilityService = botUtilityService;
         this.pollService = pollService;
         this.couponService = couponService;
+        this.userService = userService;
         this.ledikomBot = ledikomBot;
         this.eventCollectorRepository = eventCollectorRepository;
     }
@@ -99,6 +101,19 @@ public class ScheduleService {
                         .messageId(entry.getKey().getMessageId())
                         .build();
                 deleteMessageCallback.execute(deleteMessage);
+                return true;
+            }
+            return false;
+        });
+    }
+
+    @Scheduled(fixedRate = 1000 * 60)
+    public void resetUserStateIfNoResponseAfterTime() {
+        LocalDateTime checkpointTimestamp = LocalDateTime.now();
+        UserService.userStatesToReset.entrySet().removeIf(entry -> {
+            if (entry.getValue().isBefore(checkpointTimestamp)) {
+                sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.responseTimeExceeded(), entry.getKey()));
+                userService.resetUserState(entry.getKey());
                 return true;
             }
             return false;

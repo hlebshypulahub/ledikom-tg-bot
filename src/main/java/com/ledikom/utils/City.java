@@ -1,13 +1,15 @@
 package com.ledikom.utils;
 
 public enum City {
-    BORISOV("Борисов"),
-    MINSK("Минск"),
-    M_GORKA("Марьина Горка");
+    BORISOV("Борисов", "\uD83C\uDFD9"),
+    MINSK("Минск", "\uD83C\uDF03"),
+    M_GORKA("Марьина Горка", "\uD83C\uDF09");
 
     public final String label;
+    public final String logo;
 
-    City(String label) {
+    City(String label, final String logo) {
         this.label = label;
+        this.logo = logo;
     }
 }

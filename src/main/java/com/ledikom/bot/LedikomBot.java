@@ -76,7 +76,7 @@ public class LedikomBot extends TelegramLongPollingBot {
         chatIdActions.put(cmd -> cmd.equals(BotCommands.TRIGGER_NEWS.label),
                 this.userService::triggerReceiveNewsMessage);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.NOTES.label),
-                this.userService::sendNoteAndSetUserResponseState);
+                this.userService::processNoteRequestAndBuildSendMessageList);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.DATE.label),
                 this.userService::sendDateAndSetUserResponseState);
         chatIdActions.put(cmd -> cmd.equals(BotCommands.MUSIC.label),
@@ -202,6 +202,7 @@ public class LedikomBot extends TelegramLongPollingBot {
             sendPhoto.setChatId(chatId.toString());
             sendPhoto.setPhoto(inputFile);
             sendPhoto.setCaption(caption);
+            sendPhoto.setParseMode("Markdown");
             Message sentMessage = execute(sendPhoto);
             return new MessageIdInChat(sentMessage.getChatId(), sentMessage.getMessageId());
         } catch (TelegramApiException e) {
@@ -213,8 +214,6 @@ public class LedikomBot extends TelegramLongPollingBot {
     private void sendMessage(BotApiMethodMessage message) {
         try {
             if (message != null) {
-                System.out.println(((SendMessage) message).getChatId());
-                System.out.println(((SendMessage) message).getText());
                 execute(message);
             }
         } catch (Exception e) {
@@ -245,6 +244,7 @@ public class LedikomBot extends TelegramLongPollingBot {
                 .chatId(chatId)
                 .messageId(messageId)
                 .text(editedMessage)
+                .parseMode("Markdown")
                 .build();
 
         try {
@@ -259,6 +259,7 @@ public class LedikomBot extends TelegramLongPollingBot {
                 .chatId(chatId)
                 .messageId(messageId)
                 .caption(newCaption)
+                .parseMode("Markdown")
                 .build();
 
         try {

@@ -93,13 +93,13 @@ public class BotUtilityService {
 
     public void addMusicDurationButtonsToSendMessage(final SendMessage sm, String musicString) {
         addButtonsToMessage(sm, 2,
-                List.of("5 мин", "10 мин", "15 мин", "20 мин"),
+                List.of("5 мин \uD83D\uDD51", "10 мин \uD83D\uDD53", "15 мин \uD83D\uDD56", "20 мин \uD83D\uDD59"),
                 List.of(musicString + "_5", musicString + "_10", musicString + "+15", musicString + "_20"));
     }
 
     public void addCitiesButtons(final SendMessage sm, final Set<City> cities) {
         addButtonsToMessage(sm, 2,
-                cities.stream().map(city -> "\uD83C\uDFE5 " + city.label).collect(Collectors.toList()),
+                cities.stream().map(city -> city.label + " " + city.logo).collect(Collectors.toList()),
                 cities.stream().map(Enum::name).collect(Collectors.toList()));
     }
 
@@ -112,7 +112,7 @@ public class BotUtilityService {
     }
 
     public void addPromotionAcceptButton(final SendMessage sm) {
-        addButtonToMessage(sm, "Участвовать", "promotionAccept");
+        addButtonToMessage(sm, "⭐⭐⭐ Участвовать ⭐⭐⭐", "promotionAccept");
     }
 
     public InlineKeyboardMarkup createListOfCoupons(final Set<Coupon> coupons) {

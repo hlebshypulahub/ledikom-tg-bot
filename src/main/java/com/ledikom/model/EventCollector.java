@@ -26,6 +26,7 @@ public class EventCollector {
     private int note;
     private int city;
     private int newsDisabled;
+    private int consultation;
 
     public void reset() {
         timestamp = null;
@@ -41,6 +42,7 @@ public class EventCollector {
         note = 0;
         city = 0;
         newsDisabled = 0;
+        consultation = 0;
     }
 
     public void incrementCoupon() {
@@ -87,6 +89,10 @@ public class EventCollector {
         city = city + 1;
     }
 
+    public void incrementConsultation() {
+        consultation = consultation + 1;
+    }
+
     public void incrementNewsDisabled() {
         newsDisabled = newsDisabled + 1;
     }
@@ -98,6 +104,7 @@ public class EventCollector {
     public String messageToAdmin() {
         return "Счетчик новых событий:\n\n" +
                 coupon + " - Активированные купоны: " + "\n" +
+                consultation + " - Консультации\n" +
                 helloCoupon + " - Активированные приветственные купоны\n" +
                 dateCoupon + " - Активированные купоны Особенная Дата\n" +
                 refLink + " - Переход по реферальной ссылке\n" +

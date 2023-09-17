@@ -107,7 +107,7 @@ public class BotService {
         if (!userService.userExistsByChatId(chatId)) {
             userService.addNewUser(chatId);
             var sm = botUtilityService.buildSendMessage(BotResponses.startMessage(), chatId);
-            botUtilityService.addPreviewCouponButton(sm, couponService.getHelloCoupon(), "Активировать приветственный купон");
+            botUtilityService.addPreviewCouponButton(sm, couponService.getHelloCoupon(), "Активировать приветственный купон \uD83D\uDC4B");
             sendMessageCallback.execute(sm);
 
             sm = botUtilityService.buildSendMessage(BotResponses.chooseYourCity(), chatId);
@@ -126,7 +126,7 @@ public class BotService {
         if (couponService.couponCanBeUsedNow(coupon)) {
             boolean inAllPharmacies = pharmacyService.findAll().size() == coupon.getPharmacies().size();
             sm = botUtilityService.buildSendMessage(BotResponses.couponAcceptMessage(coupon, inAllPharmacies, couponDurationInMinutes), chatId);
-            botUtilityService.addAcceptCouponButton(sm, coupon, "Активировать купон");
+            botUtilityService.addAcceptCouponButton(sm, coupon, "Активировать купон ✅");
         } else {
             LOGGER.error("Coupon is not active for user: {}", chatId);
             sm = botUtilityService.buildSendMessage(BotResponses.couponIsNotActive(), chatId);
@@ -141,7 +141,7 @@ public class BotService {
         byte[] barcodeImageByteArray = coupon.getBarcodeImageByteArray();
         InputFile barcodeInputFile = new InputFile(new ByteArrayInputStream(barcodeImageByteArray), "barcode.jpg");
 
-        String couponTextWithBarcodeAndTimeSign = "Действителен до: " + couponService.getTimeSign() + "\n\n" + coupon.getBarcode() + "\n\n" + coupon.getText();
+        String couponTextWithBarcodeAndTimeSign = "Действителен до: *" + couponService.getTimeSign() + "*" + "\n\n" + coupon.getBarcode() + "\n\n" + coupon.getText();
 
         MessageIdInChat messageIdInChat = sendMessageWithPhotoCallback.execute(barcodeInputFile, BotResponses.initialCouponText(couponTextWithBarcodeAndTimeSign, couponDurationInMinutes), chatId);
         LOGGER.info("Adding coupon to map: {}, {}", messageIdInChat, couponTextWithBarcodeAndTimeSign);

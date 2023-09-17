@@ -112,16 +112,16 @@ public class AdminService {
         if (splitStringsSize == adminMessageToken.commandSize) {
             return true;
         } else {
-            sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Количество аргументов не равно " + adminMessageToken.commandSize, adminId));
+            sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Количество аргументов для *" + adminMessageToken.label + "* должно быть равно *" + adminMessageToken.commandSize + "*", adminId));
             throw new RuntimeException("Invalid command from admin, arguments list size not equal to " + adminMessageToken.commandSize + ", was calling command: " + adminMessageToken.label);
         }
     }
 
     private String getTextFromAdminMessage(final Message message) {
-        if (botUtilityService.messageHasPhoto(message) && !message.getCaption().isBlank()) {
+        if (botUtilityService.messageHasPhoto(message) && message.getCaption() != null && !message.getCaption().isBlank()) {
             LOGGER.info("Text received from caption:\n{}", message.getCaption());
             return message.getCaption();
-        } else if (message.hasText() && !message.getText().isBlank()) {
+        } else if (message.hasText() && message.getText() != null && !message.getText().isBlank()) {
             LOGGER.info("Text received from message:\n{}", message.getText());
             return message.getText();
         } else {
@@ -134,7 +134,7 @@ public class AdminService {
         List<String> splitStringsFromAdminMessage = new ArrayList<>(Arrays.stream(messageFromAdmin.split(DELIMITER)).map(String::trim).toList());
 
         if (splitStringsFromAdminMessage.size() == 1 && Stream.of(BotCommands.values()).noneMatch(botCommand -> splitStringsFromAdminMessage.get(0).startsWith(botCommand.label))) {
-            sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Не обнаруженно разделителя: " + DELIMITER, adminId));
+            sendMessageCallback.execute(botUtilityService.buildSendMessage("Неверный формат команды! Не обнаруженно разделителя: *" + DELIMITER + "*", adminId));
             throw new RuntimeException("Invalid command format, no delimiter detected: " + DELIMITER);
         }
 

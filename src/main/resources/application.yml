@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://82.209.251.148:60555/inventory
+    username: inventory_user
+    password: o5EOEPnCEvqN
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+bot:
+  username: ledikom_prod_bot
+  token: 6389794382:AAEr21msmS-AfQbfxEkMzPG2uPjmGhJ6pfs
+
+admin:
+  id: 1047250041
+  tech-id: 1047250041
+
+coupon:
+  duration-minutes: 5
+
+hello-coupon:
+  barcode: 3353894316786
+
+date-coupon:
+  barcode: 3365786516785
+
+ref10-coupon:
+  barcode: 3353459836780
+
+ref20-coupon:
+  barcode: 3987345676787
+
+ref30-coupon:
+  barcode: 3984443786783
+
+poll:
+  active-time-days: 7
+
+gpt:
+  token: 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

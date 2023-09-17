@@ -45,17 +45,19 @@ public class UserService {
     private final BotUtilityService botUtilityService;
     private final PharmacyService pharmacyService;
     private final LedikomBot ledikomBot;
+    private final GptService gptService;
 
     private SendMessageCallback sendMessageCallback;
     private SendMessageWithPhotoCallback sendMessageWithPhotoCallback;
 
-    public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService, final BotUtilityService botUtilityService, final PharmacyService pharmacyService, @Lazy final LedikomBot ledikomBot) {
+    public UserService(final UserRepository userRepository, @Lazy final CouponService couponService, final PollService pollService, final BotUtilityService botUtilityService, final PharmacyService pharmacyService, @Lazy final LedikomBot ledikomBot, final GptService gptService) {
         this.userRepository = userRepository;
         this.couponService = couponService;
         this.pollService = pollService;
         this.botUtilityService = botUtilityService;
         this.pharmacyService = pharmacyService;
         this.ledikomBot = ledikomBot;
+        this.gptService = gptService;
     }
 
     @PostConstruct
@@ -112,6 +114,7 @@ public class UserService {
             saveUser(user);
             sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.noteAdded(), chatId));
             BotService.eventCollector.incrementNote();
+            userStatesToReset.remove(chatId);
         } else if (user.getResponseState() == UserResponseState.SENDING_DATE) {
             try {
                 String[] splitDateString = text.trim().split("\\.");
@@ -126,9 +129,35 @@ public class UserService {
                 saveUser(user);
                 sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.yourSpecialDate(specialDate), chatId));
                 BotService.eventCollector.incrementDate();
+                userStatesToReset.remove(chatId);
             } catch (RuntimeException e) {
                 sendMessageCallback.execute(botUtilityService.buildSendMessage("❗Неверный формат даты, введите сообщение в цифровом формате:\n\nдень.месяц", chatId));
                 throw new RuntimeException("Invalid special date format: " + text);
+            }
+        } else if (user.getResponseState() == UserResponseState.SENDING_QUESTION) {
+            if (text.length() > GptMessage.MAX_USER_CONTENT_LENGTH) {
+                sendMessageCallback.execute(botUtilityService.buildSendMessage("Вопрос содержит более " + GptMessage.MAX_USER_CONTENT_LENGTH + " знаков. Сократите и повторите попытку.", chatId));
+                throw new RuntimeException("User content length exceeds max limit: length = " + text.length());
+            } else {
+                user.setResponseState(UserResponseState.NONE);
+                saveUser(user);
+                sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.waitForGptResponse(), chatId));
+                String gptResponse;
+                try {
+                    gptResponse = gptService.getResponse(text);
+                } catch (Exception e) {
+                    gptResponse = "Консультация недоступна, повторите попытку позже.";
+                    e.printStackTrace();
+                }
+                if (gptResponse.toLowerCase().contains(GptMessage.NON_RELATED_RESPONSE_TOKEN)) {
+                    sendMessageCallback.execute(botUtilityService.buildSendMessage("Вопрос не относится к теме медицины или здоровья.", chatId));
+                    throw new RuntimeException("Question is not on medicine&health topic");
+                }
+                sendMessageCallback.execute(botUtilityService.buildSendMessage(gptResponse, chatId));
+                LOGGER.info("Вопрос: " + text);
+                LOGGER.info("Ответ: " + gptResponse);
+                userStatesToReset.remove(chatId);
+                BotService.eventCollector.incrementConsultation();
             }
         } else {
             sendMessageCallback.execute(botUtilityService.buildSendMessage("Нет такой команды!", chatId));
@@ -164,6 +193,8 @@ public class UserService {
     }
 
     public void processNoteRequestAndBuildSendMessageList(final long chatId) {
+        userStatesToReset.remove(chatId);
+
         User user = findByChatId(chatId);
         user.setResponseState(UserResponseState.SENDING_NOTE);
         saveUser(user);
@@ -296,6 +327,7 @@ public class UserService {
         User user = findByChatId(chatId);
         SendMessage sm;
         if (user.getSpecialDate() == null) {
+            userStatesToReset.remove(chatId);
             user.setResponseState(UserResponseState.SENDING_DATE);
             saveUser(user);
             sm = botUtilityService.buildSendMessage(BotResponses.addSpecialDate(), chatId);
@@ -306,15 +338,20 @@ public class UserService {
         sendMessageCallback.execute(sm);
     }
 
-    public void setStateToNone(final Long chatId) {
+    public void resetUserState(final Long chatId) {
         User user = findByChatId(chatId);
         user.setResponseState(UserResponseState.NONE);
         saveUser(user);
     }
 
-    public void resetUserState(final Long chatId) {
+    public void sendConsultationWikiAndSetUserResponseState(final long chatId) {
+        userStatesToReset.remove(chatId);
+
         User user = findByChatId(chatId);
-        user.setResponseState(UserResponseState.NONE);
+        user.setResponseState(UserResponseState.SENDING_QUESTION);
         saveUser(user);
+
+        userStatesToReset.put(chatId, LocalDateTime.now().plusMinutes(TO_RESET_AFTER_TIME_MIN));
+        sendMessageCallback.execute(botUtilityService.buildSendMessage(BotResponses.consultationWiki(), chatId));
     }
 }

@@ -9,6 +9,7 @@ public enum BotCommands {
     CITY("/moy_gorod"),
     PROMOTION_ACCEPT("promotionAccept"),
     DATE("/osobennaya_data"),
+    CONSULTATION("/konsultaciya"),
     TRIGGER_NEWS("/vkl_otkl_rassylku");
 
     public final String label;
